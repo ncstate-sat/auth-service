@@ -5,4 +5,5 @@ PyJWT
 python-dotenv
 google-auth
 requests
+pymongo
 pytest
