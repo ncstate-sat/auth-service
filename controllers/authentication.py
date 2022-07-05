@@ -22,9 +22,11 @@ def google_login(response: Response, body: TokenRequestBody):
         account = Account.find_by_email(user_email)
 
         new_token = Token.generate_token(account.__dict__)
+        new_refresh_token = Token.generate_refresh_token(account.email)
 
         return {
-            'token': new_token
+            'token': new_token,
+            'refresh_token': new_refresh_token
         }
 
     except ValueError as e:
@@ -49,9 +51,33 @@ def login(response: Response, authorization: str = Header(default=None)):
 
         return payload
 
-    except ValueError as e:
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    except:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
         return {
-            'message': 'There was an error decoding the authentication token.',
-            'error': e
+            'message': 'Not Authenticated'
+        }
+
+
+@router.post('/refresh-token', tags=['Authentication'])
+def refresh_token(response: Response, body: TokenRequestBody):
+    """Returns a new token and refresh token.
+    
+    The JWT used for authentication expires 15 minutes after it's generated. The refresh token can be used to extend the user's session with the app without asking them to sign back in. This function takes a refresh token, and it returns a new auth token (expires in 15 minutes) and a new refresh token.
+    """
+    try:
+        payload = Token.decode_token(body.token)
+        account = Account.find_by_email(payload['email'])
+
+        new_token = Token.generate_token(account.__dict__)
+        new_refresh_token = Token.generate_refresh_token(account.email)
+
+        return {
+            'token': new_token,
+            'refresh_token': new_refresh_token
+        }
+
+    except:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return {
+            'message': 'Refresh Token Expired'
         }

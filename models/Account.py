@@ -2,14 +2,11 @@ import util.db as db
 
 
 class Account:
-    id = None
     email = None
     campus_id = None
     authorizations = {}
 
     def __init__(self, config):
-        if 'id' in config:
-            self.id = config['id']
         if 'email' in config:
             self.email = config['email']
         if 'campus_id' in config:
@@ -18,10 +15,10 @@ class Account:
             self.authorizations = config['authorizations']
 
     def update(self):
-        return db.update_account_by_id(self.id, self.__dict__)
+        return db.update_account(self.__dict__)
 
     def delete(self):
-        return db.delete_account_by_id(self.id)
+        return db.delete_account(self.id)
 
     def get_authorization(self, service_name):
         return self.authorizations[service_name]
@@ -34,21 +31,17 @@ class Account:
         return self.authorizations.pop(service_name)
 
     @staticmethod
-    def find_by_id(account_id):
-        db_account = db.get_account_by_id(account_id)
-        return Account(config=db_account)
-
-    @staticmethod
     def find_by_email(email):
         db_account = db.get_account_by_email(email)
-        return Account(config=db_account)
+        if db_account is None:
+            new_account = Account.create_account(email, None)
+            return new_account
+        else:
+            return Account(config=db_account)
 
     @staticmethod
-    def find_by_campus_id(campus_id):
-        db_account = db.get_account_by_campus_id(campus_id)
-        return Account(config=db_account)
-
-    @staticmethod
-    def create_account(email, campus_id, authorizations):
-        account_data = db.create_account(email, campus_id, authorizations)
+    def create_account(email, campus_id, authorizations={}):
+        account_data = {'email': email, 'campus_id': campus_id,
+                        'authorizations': authorizations}
+        db.create_account(account_data)
         return Account(config=account_data)

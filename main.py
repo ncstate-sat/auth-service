@@ -27,6 +27,9 @@ The payload of the token contains the user's email address, campus ID, and their
 }
 ```
 Each app can use the authorization endpoints to create and update whatever data they want for each user account. 
+
+## Token Expiration & Refresh
+Each auth JWT expires 15 minutes after it's generated. After expiring, the token is useless. To keep using the apps and services, a new token will have to be generated. So the user doesn't have to sign in every 15 minutes, a refresh token is used. Upon signing in, an auth token and refresh token is sent to the client. After the auth token expires, the refresh token can be used to generate another auth token. That refresh token expires 2 days after being generated, and it's replaced every time the auth token is replaced.
 """
 
 
