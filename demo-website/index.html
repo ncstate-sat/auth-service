@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Authentication</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <style>
+        * {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .monospace {
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .code {
+            display: inline-block;
+            background-color: #DDDDDD;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: #EEEEEE;
+        }
+
+        main {
+            max-width: 50rem;
+            width: calc(100% - 2rem);
+            margin: 1rem auto;
+            padding: 1rem;
+            background-color: white;
+        }
+
+        .auth-result__caption {
+            font-weight: 700;
+        }
+
+        .auth-result__data {
+            overflow: scroll;
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <h1>Auth Service Demo</h1>
+        <p>This project is a demonstration of the auth service. This webpage will display the Sign In with Google button
+            and allow a user to sign in.</p>
+        <ol>
+            <li>User will click the Sign In with Google button. A Google window will appear where the user will authenticate. When that happens successfully, a credential response is sent back to the browser. In that credential, the user's email address is encoded.</li>
+            <li>That Google credential is sent to the auth service, where it is decoded. The email address is derrived, and the auth service collects authorization data for that email address. That data is encoded into a new auth token. A refresh token is also generated.</li>
+            <li>The auth token is sent to the services in each request to securly use them.</li>
+        </ol>
+        <div id="buttonDiv"></div>
+        <p class="auth-result">
+            <div class="auth-result__caption">Google Credential (Used once to authentiate)</div>
+            <div class="monospace auth-result__data" id="credential"></div>
+        </p>
+        <p class="auth-result">
+            <div class="auth-result__caption">Auth Token <div class="code">/google-sign-in</div></div>
+            <div class="monospace auth-result__data" id="token"></div>
+        </p>
+        <p class="auth-result">
+            <div class="auth-result__caption">Refresh Token <div class="code">/google-sign-in</div></div>
+            <div class="monospace auth-result__data" id="refresh-token"></div>
+        </p>
+        <p class="auth-result">
+            <div class="auth-result__caption">Token Payload <div class="code">/login</div></div>
+            <div class="monospace auth-result__data" id="payload"></div>
+        </p>
+    </main>
+
+    <script>
+        function handleCredentialResponse(response) {
+            const credentialElement = document.getElementById('credential');
+            credentialElement.innerText = response['credential'];
+
+            return fetch('http://localhost:8000/google-sign-in', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    token: response.credential
+                })
+            }).then(response => {
+                return response.json();
+            }).then(result => {
+                const tokenElement = document.getElementById('token');
+                tokenElement.innerText = result['token'];
+                const refreshTokenElement = document.getElementById('refresh-token');
+                refreshTokenElement.innerText = result['refresh_token'];
+
+                return fetch('http://localhost:8000/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + result.token
+                    },
+                    body: JSON.stringify({
+                        token: result.token
+                    })
+                });
+
+            }).then(response => {
+                return response.json();
+            }).then(result => {
+                console.log(result);
+                const resultElement = document.getElementById('payload');
+                resultElement.innerText = JSON.stringify(result);
+
+            }).catch(error => {
+                console.error(error);
+            })
+        }
+
+        window.onload = function () {
+            google.accounts.id.initialize({
+                client_id: "client-id.apps.googleusercontent.com",
+                callback: handleCredentialResponse
+            });
+            google.accounts.id.renderButton(
+                document.getElementById("buttonDiv"),
+                { theme: "outline", size: "large" }  // customization attributes
+            );
+            //   google.accounts.id.prompt(); // also display the One Tap dialog
+        }
+    </script>
+</body>
+
+</html>
