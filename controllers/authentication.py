@@ -26,7 +26,8 @@ def google_login(response: Response, body: TokenRequestBody):
 
         return {
             'token': new_token,
-            'refresh_token': new_refresh_token
+            'refresh_token': new_refresh_token,
+            'payload': account.__dict__
         }
 
     except ValueError as e:
@@ -73,7 +74,8 @@ def refresh_token(response: Response, body: TokenRequestBody):
 
         return {
             'token': new_token,
-            'refresh_token': new_refresh_token
+            'refresh_token': new_refresh_token,
+            'payload': account.__dict__
         }
 
     except:
