@@ -1,4 +1,4 @@
-import util.db as db
+from util.db import AuthDB
 
 
 class Account:
@@ -15,10 +15,10 @@ class Account:
             self.authorizations = config['authorizations']
 
     def update(self):
-        return db.update_account(self.__dict__)
+        return AuthDB.update_account(self.__dict__)
 
     def delete(self):
-        return db.delete_account(self.id)
+        return AuthDB.delete_account(self.id)
 
     def get_authorization(self, service_name):
         return self.authorizations[service_name]
@@ -32,7 +32,7 @@ class Account:
 
     @staticmethod
     def find_by_email(email):
-        db_account = db.get_account_by_email(email)
+        db_account = AuthDB.get_account_by_email(email)
         if db_account is None:
             new_account = Account.create_account(email, None)
             return new_account
@@ -43,5 +43,5 @@ class Account:
     def create_account(email, campus_id, authorizations={}):
         account_data = {'email': email, 'campus_id': campus_id,
                         'authorizations': authorizations}
-        db.create_account(account_data)
+        AuthDB.create_account(account_data)
         return Account(config=account_data)

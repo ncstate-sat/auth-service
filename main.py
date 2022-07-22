@@ -1,3 +1,7 @@
+"""
+The starting point for the auth service.
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -6,7 +10,7 @@ from controllers.authorization import router as authorization_router
 load_dotenv()
 
 
-description = """
+DESCRIPTION = """
 Handle authentication and authorization in your NCSU app. Sign in with Google and get back a token that will authenticate the user across multiple services and keep track of all authorizations across all of those services.
 
 ## Authentication Methods
@@ -34,7 +38,7 @@ Each auth JWT expires 15 minutes after it's generated. After expiring, the token
 
 app = FastAPI(
     title='Auth Service',
-    description=description,
+    description=DESCRIPTION,
     version="1.0.0"
 )
 
