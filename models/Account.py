@@ -1,6 +1,6 @@
 """A model to handle account CRUD."""
 
-import util.db as db
+from util.db import AuthDB
 
 
 class Account:
@@ -19,11 +19,11 @@ class Account:
 
     def update(self):
         """Updates this instance in the database."""
-        return db.update_account(self.__dict__)
+        return AuthDB.update_account(self.__dict__)
 
     def delete(self):
         """Deletes this instance from the database."""
-        return db.delete_account(self.__dict__)
+        return AuthDB.delete_account(self.id)
 
     def get_authorization(self, service_name):
         """Returns the authorization data given a service name. Does not """
@@ -48,7 +48,7 @@ class Account:
 
         :param email: The email addres of the account.
         """
-        db_account = db.get_account_by_email(email)
+        db_account = AuthDB.get_account_by_email(email)
         if db_account is None:
             new_account = Account.create_account(email, None)
             return new_account
@@ -83,5 +83,5 @@ class Account:
             authorizations = {}
         account_data = {'email': email, 'campus_id': campus_id,
                         'authorizations': authorizations}
-        db.create_account(account_data)
+        AuthDB.create_account(account_data)
         return Account(config=account_data)
