@@ -36,14 +36,13 @@ def get_accounts_with_authorization(response: Response,
 
     # If requesting user has permission, return accounts data.
     if read_permissions.get(
-        'superuser', False) is True or read_permissions.get(
-            db_filter, False) is True:
+                        '_superuser', False) is True or read_permissions.get(
+                        db_filter, False) is True:
         accounts = Account.find_by_authorization(app_id, db_filter, value)
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': """This account is not authorized to write to this
-            user's authorization(s)."""
+            'error': """This account is not authorized to write to this user's authorization(s)."""
         }
 
     return {
@@ -70,18 +69,35 @@ def update_authorization(response: Response,
     write_permissions: dict = requesting_account.authorizations.get(
                                             body.app_id, {}).get('_write', {})
 
-    # If requesting user has permission, write new permission(s) to the database.
-    if write_permissions.get('superuser', False) is True:
-        account = Account.find_by_email(body.email)
+    account = Account.find_by_email(body.email)
+
+    # Ensure this user has permission to update this authorization.
+    can_write_permissions: bool = write_permissions.get('_superuser', False)
+    if not can_write_permissions:
+        existing_authorization_keys = list(
+            account.authorizations.get(body.app_id, {}).keys())
+        future_authorization_keys = list(body.authorization.keys())
+        authorization_key_change_delta = list(
+            set(existing_authorization_keys).difference(
+                set(future_authorization_keys)))
+        changing_keys = future_authorization_keys + authorization_key_change_delta
+
+        has_individual_permissions = True
+        for key in changing_keys:
+            if not write_permissions.get(key, False):
+                has_individual_permissions = False
+                break
+        can_write_permissions = has_individual_permissions
+
+    # If requesting user has permission, write new permissions to the database.
+    if can_write_permissions:
+        account.update_authorization(body.app_id, body.authorization)
+        account.update()
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': """This account is not authorized to write to this
-            user's authorization(s)."""
+            'error': """This account is not authorized to write to this user's authorization(s)."""
         }
-
-    account.update_authorization(body.app_id, body.authorization)
-    account.update()
 
     return {
         'authorizations': account.authorizations
@@ -105,13 +121,14 @@ def remove_authorization(response: Response,
     write_permissions: dict = requesting_account.authorizations.get(
                                             app_id, {}).get('_write', {})
 
-    if write_permissions.get('superuser', False) is True:
+    # If requesting user has permission,
+    # delete app permission(s) from the database.
+    if write_permissions.get('_superuser', False) is True:
         account = Account.find_by_email(email)
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': """This account is not authorized to delete
-            this user's authorization(s)."""
+            'error': """This account is not authorized to delete this user's authorization(s)."""
         }
 
     try:
