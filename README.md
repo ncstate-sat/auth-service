@@ -4,7 +4,11 @@ This service handles all authentication and authorization needs for SAT applicat
 ## Required Environment Variables
 - `GOOGLE_CLIENT_ID`: This ID is required to decode Google Auth tokens.
 - `JWT_SECRET`: This key is used to encode and decode JWT's sent to clients.
-- `MONGODB_URL`: The connection string to the MongoDB instance.
+- `MONGODB_URL`: The connection string to the MongoDB instance. The password for the database can be hardcoded into the string, or it can be replaced with "password" to be replaced with the password from Passwordstate.
+- `PASSWORD_API_BASE_URL`: The base URL for the Passwordstate API.
+- `PASSWORD_API_KEY`: The API Key used to authenticate with the Passwordstate API.
+- `PASSWORD_API_LIST_ID`: The List ID for Passwordstate.
+- `PASSWORD_TITLE`: The title of the password to use for the MongoDB database.
 
 ## Other Requirements
 A MongoDB database is required for this service to work. The database name should be `Accounts`, and it should contain one collection called `accounts`. A MongoDB instance can be spun up easily with docker:

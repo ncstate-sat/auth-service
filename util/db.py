@@ -17,14 +17,16 @@ class AuthDB:
         """Gets password from Passwordstate."""
         if cls.account_collection is None:
             passwordstate = passwords.PasswordstateLookup(
-                 os.getenv('PASSWORD_API_BASE_URL'),
-                 os.getenv('PASSWORD_API_KEY'))
+                os.getenv('PASSWORD_API_BASE_URL'),
+                os.getenv('PASSWORD_API_KEY'))
             password_data = passwordstate.get_pw_by_title(
-                 os.getenv('PASSWORD_API_LIST_ID'),
-                 os.getenv('PASSWORD_TITLE'))
+                os.getenv('PASSWORD_API_LIST_ID'),
+                os.getenv('PASSWORD_TITLE'))
             mongo_connection = os.getenv('MONGODB_URL')
-            client = MongoClient(mongo_connection.replace('password', password_data))
-            cls.account_collection = client['Accounts'].get_collection('accounts')
+            client = MongoClient(mongo_connection.replace(
+                'password', password_data))
+            cls.account_collection = client['Accounts'].get_collection(
+                'accounts')
 
     @classmethod
     def get_account_by_email(cls, email: str) -> dict:
@@ -44,7 +46,10 @@ class AuthDB:
     def update_account(cls, account: dict):
         """Updates an account in the database."""
         cls.__setup_database()
-        return cls.account_collection.update_one({'email': account['email']}, {'$set': account})
+        return cls.account_collection.update_one({
+            'email': account['email']},
+            {'$set': account})
+
 
     @classmethod
     def delete_account(cls, account: dict):
