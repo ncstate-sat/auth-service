@@ -1,3 +1,4 @@
+
 """
 CRUD functions for the database.
 """
@@ -29,7 +30,11 @@ class AuthDB:
 
     @classmethod
     def get_account_by_email(cls, email: str) -> dict:
-        """Finds an account by email address."""
+        """
+        Finds an account from the mongo database given an email addres.
+
+        :param email: The email address of the account.
+        """
         cls.__setup_database()
 
         account_data: dict = cls.account_collection.find_one({'email': email})
@@ -41,21 +46,27 @@ class AuthDB:
     def update_account(cls, account: dict):
         """Updates an account in the database."""
         cls.__setup_database()
-
         return cls.account_collection.update_one({
             'email': account['email']},
             {'$set': account})
 
+
     @classmethod
     def delete_account(cls, account: dict):
-        """Deletes an account from the database."""
-        cls.__setup_database()
+        """
+        Deletes an account from the mongo database.
 
+        :param account: The account data.
+        """
+        cls.__setup_database()
         return cls.account_collection.delete_one({'email': account['email']})
 
     @classmethod
     def create_account(cls, account_data: dict):
-        """Creates a new account in the database."""
-        cls.__setup_database()
+        """
+        Creates an account in the mongo database.
 
+        :param account: The account data.
+        """
+        cls.__setup_database()
         return cls.account_collection.insert_one(account_data)
