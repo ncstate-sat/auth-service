@@ -1,4 +1,3 @@
-
 """
 CRUD functions for the database.
 """
@@ -40,6 +39,18 @@ class AuthDB:
         account_data: dict = cls.account_collection.find_one({'email': email})
         if account_data is not None:
             account_data.pop('_id')
+        return account_data
+    
+    @classmethod
+    def get_account_by_authorization(cls, key: str, value: str) -> list[dict]:
+        """
+        Finds an account from the mongo database given an email addres.
+
+        :param email: The email address of the account.
+        """
+        cls.__setup_database()
+
+        account_data: list[dict] = cls.account_collection.find({key: value})
         return account_data
 
     @classmethod
