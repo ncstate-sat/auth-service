@@ -30,9 +30,13 @@ class AuthDB:
     @classmethod
     def get_account_by_email(cls, email: str) -> dict:
         """
-        Finds an account from the mongo database given an email addres.
+        Finds an account from the mongo database given an email address.
 
-        :param email: The email address of the account.
+        Parameters:
+            email: The email address of the account.
+        
+        Returns:
+            The account data.
         """
         cls.__setup_database()
 
@@ -44,9 +48,15 @@ class AuthDB:
     @classmethod
     def get_account_by_authorization(cls, key: str, value: str) -> list[dict]:
         """
-        Finds an account from the mongo database given an email addres.
+        Finds all accounts from the mongo database that have a given
+        authorization.
 
-        :param email: The email address of the account.
+        Parameters:
+            key: The key in the user's authorization data to test.
+            value: The value which will be true for all returned accounts.
+        
+        Returns:
+            All accounts with the given authorization.
         """
         cls.__setup_database()
 
@@ -55,7 +65,9 @@ class AuthDB:
 
     @classmethod
     def update_account(cls, account: dict):
-        """Updates an account in the database."""
+        """
+        Updates an account in the database.
+        """
         cls.__setup_database()
         return cls.account_collection.update_one({
             'email': account['email']},
@@ -67,7 +79,8 @@ class AuthDB:
         """
         Deletes an account from the mongo database.
 
-        :param account: The account data.
+        Parameters:
+            account: The account data.
         """
         cls.__setup_database()
         return cls.account_collection.delete_one({'email': account['email']})
@@ -77,7 +90,8 @@ class AuthDB:
         """
         Creates an account in the mongo database.
 
-        :param account: The account data.
+        Parameters
+            account: The account data.
         """
         cls.__setup_database()
         return cls.account_collection.insert_one(account_data)
