@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: auth-service
+    namespace: auth-service
+    annotations:
+      kubernetes.io/ingress.class: public
+      cert-manager.io/cluster-issuer: sectigo-production
+spec:
+    rules:
+    - host: auth.services.ehps.ncsu.edu
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: auth-service
+              port:
+                number: 8000
+    tls:
+    -
+      hosts:
+        - auth.services.ehps.ncsu.edu
+      secretName: auth-tls

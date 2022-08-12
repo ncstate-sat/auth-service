@@ -1,0 +1,10 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: auth-service
+  namespace: auth-service
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - port: 8000

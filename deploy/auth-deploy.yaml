@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: auth-service
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: satregistry.ehps.ncsu.edu/auth-service/service:latest
+          imagePullPolicy: Always
+          env:
+          - name: GOOGLE_CLIENT_ID
+            value: "4944492663-6msau4peegvm3oqa9pbgsmncorfkj5sa.apps.googleusercontent.com"
+          - name: JWT_SECRET
+            value: "secret_here"
+          - name: MONGODB_URL
+            value: "mongodb://authenticationsvc:password@vm-edc-mdb-01.ehps.ncsu.edu,vm-edc-mdb-02.ehps.ncsu.edu,vm-edc-mdb-03.ehps.ncsu.edu/?authSource=Accounts"
+          - name: MONGO_PASSWORD_ID
+            value: "5678"
+          - name: API_KEY
+            value: "api_key_here"
+          - name: http_proxy
+            value: "http://proxy.oit.ncsu.edu:3128"
+          - name: https_proxy
+            value: "http://proxy.oit.ncsu.edu:3128"
+          - name: no_proxy
+            value: "ncsu.edu,localhost,*.svc,127.0.0.1,152.1.0.0/16,152.7.0.0/16,152.14.0.0/16,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8,172.16.0.0/16,edc-k8s-01,edc-k8s-02,edc-k8s-03"
+          - name: MONGO_PASSWORD_ID
+            value: "5678"
+          - name: PASSWORD_API_BASE_URL
+            value: "https://password.ehps.ncsu.edu"
+          - name: PASSWORD_API_KEY
+            value: "api_key_here"
+          - name: PASSWORD_API_LIST_ID
+            value: "2172"
+          - name: PASSWORD_TITLE          
+            value: "accountsvc_prod"
