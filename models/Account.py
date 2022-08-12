@@ -23,7 +23,7 @@ class Account:
 
     def delete(self):
         """Deletes this instance from the database."""
-        return AuthDB.delete_account(self.id)
+        return AuthDB.delete_account(self.__dict__)
 
     def get_authorization(self, service_name):
         """Returns the authorization data given a service name. Does not """
@@ -62,13 +62,12 @@ class Account:
 
         :param filter: The attribute that should be searched.
         """
-        db_accounts = db.get_account_by_authorization(f'authorizations.{app_id}.{db_filter}', value)
+        db_accounts = AuthDB.get_account_by_authorization(f'authorizations.{app_id}.{db_filter}', value)
         accounts = []
         for account in db_accounts:
             accounts.append(Account(config=account))
 
         return accounts
-
 
     @staticmethod
     def create_account(email, campus_id, authorizations=None):
