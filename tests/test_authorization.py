@@ -249,7 +249,9 @@ def test_add_update_authorization(monkeypatch):
     assert response.json() == {
         'authorizations': {
             'test-app': {
-                'access': True
+                'access': True,
+                '_read': {},
+                '_write': {}
             }
         }
     }
@@ -282,17 +284,23 @@ def test_subtract_update_authorization(monkeypatch):
 
     token = Token.generate_token(ADMIN_ACCOUNT_FULL_PERMISSION)
     response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {}
-                          })
+                        headers={'Authorization': f'Bearer {token}'},
+                        json={
+                            'email': 'user@ncsu.edu',
+                            'app_id': 'test-app',
+                            'authorization': {
+                                'access': False
+                            }
+                        })
 
     assert response.status_code == 200
     assert response.json() == {
         'authorizations': {
-            'test-app': {}
+            'test-app': {
+                'access': False,
+                '_read': {},
+                '_write': {}
+            }
         }
     }
 
@@ -330,7 +338,9 @@ def test_add_update_authorization_with_some_permission(monkeypatch):
     assert response.json() == {
         'authorizations': {
             'test-app': {
-                'access': True
+                'access': True,
+                '_read': {},
+                '_write': {}
             }
         }
     }
@@ -366,17 +376,23 @@ def test_subtract_update_authorization_with_some_permission(monkeypatch):
 
     token = Token.generate_token(ADMIN_ACCOUNT_SOME_PERMISSION)
     response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {}
-                          })
+                        headers={'Authorization': f'Bearer {token}'},
+                        json={
+                            'email': 'user@ncsu.edu',
+                            'app_id': 'test-app',
+                            'authorization': {
+                                'access': False
+                            }
+                        })
 
     assert response.status_code == 200
     assert response.json() == {
         'authorizations': {
-            'test-app': {}
+            'test-app': {
+                'access': False,
+                '_read': {},
+                '_write': {}
+            }
         }
     }
 
