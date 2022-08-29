@@ -71,9 +71,15 @@ def update_authorization(response: Response,
 
     account = Account.find_by_email(body.email)
 
-    # Ensure this user has permission to update this authorization.
+    # -- Ensure this user has permission to update this authorization. --
+
+    # User can edit permissions if they have superuser privilages.
     can_write_permissions: bool = write_permissions.get('_superuser', False)
+
+    # If they don't have superuser privilages, each key must be checked.
     if not can_write_permissions:
+
+        # Get list of all keys that should change.
         existing_authorization_keys = list(
             account.authorizations.get(body.app_id, {}).keys())
         future_authorization_keys = list(body.authorization.keys())
@@ -81,15 +87,28 @@ def update_authorization(response: Response,
             set(existing_authorization_keys).difference(
                 set(future_authorization_keys)))
         changing_keys = future_authorization_keys + authorization_key_change_delta
+        changing_keys = list(filter(lambda k: k != '_read' and k != '_write', changing_keys))
 
+        # Check if user has write access on each key.
         has_individual_permissions = True
+
         for key in changing_keys:
             if not write_permissions.get(key, False):
                 has_individual_permissions = False
                 break
+        for key in body.authorization.get('_read', {}):
+            if not write_permissions.get(key, False):
+                has_individual_permissions = False
+                break
+        for key in body.authorization.get('_write', {}):
+            if not write_permissions.get(key, False):
+                has_individual_permissions = False
+                break
+
         can_write_permissions = has_individual_permissions
 
-    # If requesting user has permission, write new permissions to the database.
+
+    # -- If requesting user has permission, write new permissions to database. --
     if can_write_permissions:
         account.update_authorization(body.app_id, body.authorization)
         account.update()

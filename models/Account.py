@@ -25,16 +25,24 @@ class Account:
         """Deletes this instance from the database."""
         return AuthDB.delete_account(self.__dict__)
 
-    def get_authorization(self, service_name):
+    def get_authorization(self, service_name: str):
         """Returns the authorization data given a service name. Does not """
         return self.authorizations[service_name]
 
-    def update_authorization(self, service_name, auth_info):
+    def update_authorization(self, service_name: str, new_authorizations: dict):
         """Updates an authorization record given a service name."""
-        self.authorizations[service_name] = auth_info
+        read_values = new_authorizations.pop('_read', {})
+        write_values = new_authorizations.pop('_write', {})
+
+        self.authorizations[service_name] = self.authorizations.get(
+            service_name, {}) | new_authorizations
+        self.authorizations[service_name]['_read'] = self.authorizations.get(
+            service_name, {}).get('_read', {}) | read_values
+        self.authorizations[service_name]['_write'] = self.authorizations.get(
+            service_name, {}).get('_write', {}) | write_values
         return
 
-    def remove_authorization(self, service_name):
+    def remove_authorization(self, service_name: str):
         """Removes an authorization record given a service name."""
         if service_name in self.authorizations:
             return self.authorizations.pop(service_name)
