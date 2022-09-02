@@ -4,648 +4,505 @@ from fastapi.testclient import TestClient
 from main import app
 from models.Account import Account
 from models.Token import Token
+from util.db import AuthDB
 
 client = TestClient(app)
 
-ADMIN_ACCOUNT_FULL_PERMISSION = {
+ADMIN_ROLE = {
+    'name': 'admin',
+    'authorizations': {
+        'root': True,
+        '_read': ['admin, member'],
+        '_write': ['admin', 'member']
+    }
+}
+
+MEMBER_ROLE = {
+    'name': 'member',
+    'authorizations': {
+        'can_do_x': True,
+        'can_do_y': True,
+        '_read': [],
+        '_write': []
+    }
+}
+
+ADMIN_ACCOUNT = {
     'email': 'admin@ncsu.edu',
     'campus_id': '00101234',
-    'authorizations': {
-        'test-app': {
-            'access': True,
-            '_read': {
-                '_superuser': True
-            },
-            '_write': {
-                '_superuser': True
+    'roles': ['admin']
+}
+
+MEMBER_ACCOUNT = {
+    'email': 'member@ncsu.edu',
+    'campus_id': '00101235',
+    'roles': ['member']
+}
+
+
+def test_get_accounts_with_role(monkeypatch):
+    """
+    It should get all users with a role.
+    """
+    def mock_get_account_by_email(*_, **__):
+        return {
+            'email': 'admin@ncsu.edu',
+            'campus_id': '00101234',
+            'roles': ['admin'],
+            'authorizations': {
+                'root': True,
+                '_read': ['admin', 'member'],
+                '_write': ['admin', 'member']
             }
         }
-    }
-}
 
-ADMIN_ACCOUNT_SOME_PERMISSION = {
-    'email': 'admin@ncsu.edu',
-    'campus_id': '00101234',
-    'authorizations': {
-        'test-app': {
-            'access': True,
-            '_read': {
-                'access': True
-            },
-            '_write': {
-                'access': True
+    def mock_get_accounts_by_role(*_, **__):
+        return [
+            {
+                'email': 'member@ncsu.edu',
+                'campus_id': '00101235',
+                'roles': ['member'],
+                'authorizations': {
+                    'can_do_x': True,
+                    'can_do_y': True,
+                    '_read': [],
+                    '_write': []
+                }
             }
-        }
-    }
-}
+        ]
 
-ADMIN_ACCOUNT_WRONG_PERMISSION = {
-    'email': 'admin@ncsu.edu',
-    'campus_id': '00101234',
-    'authorizations': {
-        'test-app': {
-            'access': True,
-            '_read': {
-                'wrong-key': True
-            },
-            '_write': {
-                'wrong-key': True
-            }
-        }
-    }
-}
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
 
-ADMIN_ACCOUNT_NO_PERMISSION = {
-    'email': 'admin@ncsu.edu',
-    'campus_id': '00101234',
-    'authorizations': {
-        'test-app': {
-            'access': True,
-        }
-    }
-}
+    monkeypatch.setattr(AuthDB,
+                        'get_accounts_by_role',
+                        mock_get_accounts_by_role)
 
-REGULAR_ACCOUNT_NO_AUTHORIZATIONS = {
-    'email': 'user@ncsu.edu',
-    'campus_id': '200101234',
-    'authorizations': {}
-}
-
-
-def test_get_authorizations(monkeypatch):
-    """It should get a user's authorizations given a query."""
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_FULL_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_find_by_authorization(*_, **__):
-        return [Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)]
-
-    monkeypatch.setattr(Account,
-                        "find_by_email",
-                        mock_find_by_email)
-    monkeypatch.setattr(Account,
-                        "find_by_authorization",
-                        mock_find_by_authorization)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_FULL_PERMISSION)
+    token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
-        '/authorizations?app_id=test-app&db_filter=access&value=True',
+        '/role-accounts?role=member',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    expected_accounts = MEMBER_ACCOUNT.copy()
+    expected_accounts.update({
+        'authorizations': MEMBER_ROLE['authorizations']
+    })
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'accounts': [expected_accounts]
+    }
+
+
+def test_get_account_with_role_unauthorized(monkeypatch):
+    """
+    It should fail to get users with a certain role if the requesting account does not have authorization.
+    """
+    def mock_get_account_by_email(*_, **__):
+        return {
+            'email': 'member@ncsu.edu',
+            'campus_id': '00101235',
+            'roles': ['member'],
+            'authorizations': {
+                'can_do_x': True,
+                'can_do_y': True,
+                '_read': [],
+                '_write': []
+            }
+        }
+
+    def mock_get_accounts_by_role(*_, **__):
+        return [
+            {
+                'email': 'admin@ncsu.edu',
+                'campus_id': '00101234',
+                'roles': ['admin'],
+                'authorizations': {
+                    'root': True,
+                    '_read': ['admin', 'member'],
+                    '_write': ['admin', 'member']
+                }
+            }
+        ]
+
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
+
+    monkeypatch.setattr(AuthDB,
+                        'get_accounts_by_role',
+                        mock_get_accounts_by_role)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-accounts?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    expected_accounts = MEMBER_ACCOUNT.copy()
+    expected_accounts.update({
+        'authorizations': MEMBER_ROLE['authorizations']
+    })
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to write to this user\'s authorization(s).'
+    }
+
+
+def test_add_role(monkeypatch):
+    """
+    It should be able to add a role to an account.
+    """
+    def mock_get_account_by_email(email):
+        if email == 'member@ncsu.edu':
+            return {
+                'email': 'member@ncsu.edu',
+                'campus_id': '00101235',
+                'roles': ['member'],
+                'authorizations': {
+                    'can_do_x': True,
+                    'can_do_y': True,
+                    '_read': [],
+                    '_write': []
+                }
+            }
+        else:
+            return {
+                'email': 'admin@ncsu.edu',
+                'campus_id': '00101234',
+                'roles': ['admin'],
+                'authorizations': {
+                    'root': True,
+                    '_read': ['admin, member'],
+                    '_write': ['admin', 'member']
+                }
+            }
+
+    def mock_update_account(account_data):
+        return account_data
+
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
+
+    monkeypatch.setattr(AuthDB,
+                        'update_account',
+                        mock_update_account)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
         headers={'Authorization': f'Bearer {token}'},
         json={
-            'email': 'user@ncsu.edu',
-            'app_id': 'test-app',
-            'authorization': {'access': True}
-        })
+            'email': MEMBER_ACCOUNT['email'],
+            'add_roles': ['admin']
+        }
+    )
+
+    expected_account_state = MEMBER_ACCOUNT.copy()
+    expected_account_state['roles'].append('admin')
 
     assert response.status_code == 200
     assert response.json() == {
-        'accounts': [REGULAR_ACCOUNT_NO_AUTHORIZATIONS]
+        'account': expected_account_state
     }
 
 
-def test_get_authorizations_with_some_permission(monkeypatch):
+def test_add_role_unauthorized(monkeypatch):
     """
-    It should get a user's authorizations given a query with an
-    admin account that does not have superuser permissions.
+    It should fail to add roles to an account if the requesting account does not have authorization.
     """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_SOME_PERMISSION)
+    def mock_get_account_by_email(email):
+        if email == 'member@ncsu.edu':
+            return {
+                'email': 'member@ncsu.edu',
+                'campus_id': '00101235',
+                'roles': ['member'],
+                'authorizations': {
+                    'can_do_x': True,
+                    'can_do_y': True,
+                    '_read': [],
+                    '_write': []
+                }
+            }
         else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
+            return {
+                'email': 'admin@ncsu.edu',
+                'campus_id': '00101234',
+                'roles': ['admin'],
+                'authorizations': {
+                    'root': True,
+                    '_read': ['admin, member'],
+                    '_write': ['admin', 'member']
+                }
+            }
 
-    def mock_find_by_authorization(*_, **__):
-        return [Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)]
+    def mock_update_account(account_data):
+        return account_data
 
-    monkeypatch.setattr(Account,
-                        "find_by_email",
-                        mock_find_by_email)
-    monkeypatch.setattr(Account,
-                        "find_by_authorization",
-                        mock_find_by_authorization)
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
 
-    token = Token.generate_token(ADMIN_ACCOUNT_SOME_PERMISSION)
-    response = client.get(
-        '/authorizations?app_id=test-app&db_filter=access&value=True',
+    monkeypatch.setattr(AuthDB,
+                        'update_account',
+                        mock_update_account)
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
         headers={'Authorization': f'Bearer {token}'},
         json={
-            'email': 'user@ncsu.edu',
-            'app_id': 'test-app',
-            'authorization': {'access': True}
-        })
+            'email': ADMIN_ACCOUNT['email'],
+            'add_roles': ['member']
+        }
+    )
 
-    assert response.status_code == 200
+    expected_account_state = MEMBER_ACCOUNT.copy()
+    expected_account_state['roles'].append('admin')
+
+    assert response.status_code == 400
     assert response.json() == {
-        'accounts': [REGULAR_ACCOUNT_NO_AUTHORIZATIONS]
+        'error': 'This account is not authorized to write to this user\'s authorization(s).'
     }
 
 
-def test_get_authorizations_with_wrong_permission(monkeypatch):
+def test_remove_role(monkeypatch):
     """
-    It should not be able to get a user's authorizations
-    with an admin account that has the wrong permissions.
+    It should be able to remove multiple roles from an account.
     """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_WRONG_PERMISSION)
+    def mock_get_account_by_email(email):
+        if email == 'member@ncsu.edu':
+            return {
+                'email': 'member@ncsu.edu',
+                'campus_id': '00101235',
+                'roles': ['member'],
+                'authorizations': {
+                    'can_do_x': True,
+                    'can_do_y': True,
+                    '_read': [],
+                    '_write': []
+                }
+            }
         else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
+            return {
+                'email': 'admin@ncsu.edu',
+                'campus_id': '00101234',
+                'roles': ['admin'],
+                'authorizations': {
+                    'root': True,
+                    '_read': ['admin, member'],
+                    '_write': ['admin', 'member']
+                }
+            }
 
-    def mock_find_by_authorization(*_, **__):
-        return [Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)]
+    def mock_update_account(account_data):
+        return account_data
 
-    monkeypatch.setattr(Account,
-                        "find_by_email",
-                        mock_find_by_email)
-    monkeypatch.setattr(Account,
-                        "find_by_authorization",
-                        mock_find_by_authorization)
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
 
-    token = Token.generate_token(ADMIN_ACCOUNT_WRONG_PERMISSION)
-    response = client.get(
-        '/authorizations?app_id=test-app&db_filter=access&value=True',
+    monkeypatch.setattr(AuthDB,
+                        'update_account',
+                        mock_update_account)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
         headers={'Authorization': f'Bearer {token}'},
         json={
-            'email': 'user@ncsu.edu',
-            'app_id': 'test-app',
-            'authorization': {'access': True}
-        })
+            'email': MEMBER_ACCOUNT['email'],
+            'remove_roles': ['member']
+        }
+    )
 
-    assert response.status_code == 400
+    expected_account_state = {
+        'email': 'member@ncsu.edu',
+        'campus_id': '00101235',
+        'roles': []
+    }
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'account': expected_account_state
+    }
 
 
-def test_get_authorizations_without_permission(monkeypatch):
+def test_remove_role_unauthorized(monkeypatch):
     """
-    It should fail to get a user's authorizations if the requester
-    does not have permission.
+    It should fail to remove roles if the requesting account does not have permission.
     """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_NO_PERMISSION)
+    def mock_get_account_by_email(email):
+        if email == 'member@ncsu.edu':
+            return {
+                'email': 'member@ncsu.edu',
+                'campus_id': '00101235',
+                'roles': ['member'],
+                'authorizations': {
+                    'can_do_x': True,
+                    'can_do_y': True,
+                    '_read': [],
+                    '_write': []
+                }
+            }
         else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
+            return {
+                'email': 'admin@ncsu.edu',
+                'campus_id': '00101234',
+                'roles': ['admin'],
+                'authorizations': {
+                    'root': True,
+                    '_read': ['admin, member'],
+                    '_write': ['admin', 'member']
+                }
+            }
 
-    def mock_find_by_authorization(*_, **__):
-        return [Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)]
+    def mock_update_account(account_data):
+        return account_data
 
-    monkeypatch.setattr(Account,
-                        "find_by_email",
-                        mock_find_by_email)
-    monkeypatch.setattr(Account,
-                        "find_by_authorization",
-                        mock_find_by_authorization)
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
 
-    token = Token.generate_token(ADMIN_ACCOUNT_NO_PERMISSION)
-    response = client.get(
-        '/authorizations?app_id=test-app&db_filter=access&value=True',
+    monkeypatch.setattr(AuthDB,
+                        'update_account',
+                        mock_update_account)
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
         headers={'Authorization': f'Bearer {token}'},
         json={
-            'email': 'user@ncsu.edu',
-            'app_id': 'test-app',
-            'authorization': {'access': True}
-        })
+            'email': ADMIN_ACCOUNT['email'],
+            'remove_roles': ['admin']
+        }
+    )
 
     assert response.status_code == 400
-
-
-def test_add_update_authorization(monkeypatch):
-    """It should ensure a user's authorizations can be added to."""
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_FULL_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_FULL_PERMISSION)
-    response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {'access': True}
-                          })
-
-    assert response.status_code == 200
     assert response.json() == {
-        'authorizations': {
-            'test-app': {
-                'access': True,
-                '_read': {},
-                '_write': {}
-            }
-        }
+        'error': 'This account is not authorized to write to this user\'s authorization(s).'
     }
 
 
-def test_subtract_update_authorization(monkeypatch):
-    """It should ensure a user's authorizations can be subtracted from."""
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_FULL_PERMISSION)
-        else:
-            return Account({
-                'email': 'user@ncsu.edu',
-                'campus_id': '200101234',
+def test_add_and_remove_roles(monkeypatch):
+    """
+    It should be able to add and remove roles for an account.
+    """
+    def mock_get_account_by_email(email):
+        if email == 'member@ncsu.edu':
+            return {
+                'email': 'member@ncsu.edu',
+                'campus_id': '00101235',
+                'roles': ['member'],
                 'authorizations': {
-                    'test-app': {
-                        'access': True
-                    }
+                    'can_do_x': True,
+                    'can_do_y': True,
+                    '_read': [],
+                    '_write': []
                 }
-            })
+            }
+        else:
+            return {
+                'email': 'admin@ncsu.edu',
+                'campus_id': '00101234',
+                'roles': ['admin'],
+                'authorizations': {
+                    'root': True,
+                    '_read': ['admin, member'],
+                    '_write': ['admin', 'member']
+                }
+            }
 
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
+    def mock_update_account(account_data):
+        return account_data
 
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
 
-    token = Token.generate_token(ADMIN_ACCOUNT_FULL_PERMISSION)
-    response = client.put('/update-authorization',
-                        headers={'Authorization': f'Bearer {token}'},
-                        json={
-                            'email': 'user@ncsu.edu',
-                            'app_id': 'test-app',
-                            'authorization': {
-                                'access': False
-                            }
-                        })
+    monkeypatch.setattr(AuthDB,
+                        'update_account',
+                        mock_update_account)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'email': MEMBER_ACCOUNT['email'],
+            'add_roles': ['admin'],
+            'remove_roles': ['member']
+        }
+    )
+
+    expected_account_state = {
+        'email': 'member@ncsu.edu',
+        'campus_id': '00101235',
+        'roles': ['admin']
+    }
 
     assert response.status_code == 200
     assert response.json() == {
-        'authorizations': {
-            'test-app': {
-                'access': False,
-                '_read': {},
-                '_write': {}
-            }
-        }
+        'account': expected_account_state
     }
 
 
-def test_add_update_authorization_with_some_permission(monkeypatch):
+def test_add_and_remove_roles_unauthorized(monkeypatch):
     """
-    It should add to a user's authorizations with an admin account that
-    does not have superuser permissions.
+    It should be able to add and remove roles for an account.
     """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_SOME_PERMISSION)
+    def mock_get_account_by_email(email):
+        if email == 'member@ncsu.edu':
+            return {
+                'email': 'member@ncsu.edu',
+                'campus_id': '00101235',
+                'roles': ['member'],
+                'authorizations': {
+                    'can_do_x': True,
+                    'can_do_y': True,
+                    '_read': [],
+                    '_write': []
+                }
+            }
         else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
+            return {
+                'email': 'admin@ncsu.edu',
+                'campus_id': '00101234',
+                'roles': ['admin'],
+                'authorizations': {
+                    'root': True,
+                    '_read': ['admin, member'],
+                    '_write': ['admin', 'member']
+                }
+            }
 
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
+    def mock_update_account(account_data):
+        return account_data
 
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
+    monkeypatch.setattr(AuthDB,
+                        'get_account_by_email',
+                        mock_get_account_by_email)
 
-    token = Token.generate_token(ADMIN_ACCOUNT_SOME_PERMISSION)
-    response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {'access': True}
-                          })
+    monkeypatch.setattr(AuthDB,
+                        'update_account',
+                        mock_update_account)
 
-    assert response.status_code == 200
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'email': ADMIN_ACCOUNT['email'],
+            'add_roles': ['member'],
+            'remove_roles': ['admin']
+        }
+    )
+
+    assert response.status_code == 400
     assert response.json() == {
-        'authorizations': {
-            'test-app': {
-                'access': True,
-                '_read': {},
-                '_write': {}
-            }
-        }
+        'error': 'This account is not authorized to write to this user\'s authorization(s).'
     }
-
-
-def test_subtract_update_authorization_with_some_permission(monkeypatch):
-    """
-    It should subtract from a user's authorizations with an admin
-    account that does not have superuser permissions.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_SOME_PERMISSION)
-        else:
-            return Account({
-                'email': 'user@ncsu.edu',
-                'campus_id': '200101234',
-                'authorizations': {
-                    'test-app': {
-                        'access': True
-                    }
-                }
-            })
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_SOME_PERMISSION)
-    response = client.put('/update-authorization',
-                        headers={'Authorization': f'Bearer {token}'},
-                        json={
-                            'email': 'user@ncsu.edu',
-                            'app_id': 'test-app',
-                            'authorization': {
-                                'access': False
-                            }
-                        })
-
-    assert response.status_code == 200
-    assert response.json() == {
-        'authorizations': {
-            'test-app': {
-                'access': False,
-                '_read': {},
-                '_write': {}
-            }
-        }
-    }
-
-
-def test_add_update_authorization_with_wrong_permission(monkeypatch):
-    """
-    It should not be able to add to a user's authorizations
-    with an admin account that has the wrong permissions.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_WRONG_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_WRONG_PERMISSION)
-    response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {'access': True}
-                          })
-
-    assert response.status_code == 400
-
-
-def test_subtract_update_authorization_with_wrong_permission(monkeypatch):
-    """
-    It should not be able to subtract from a user's authorizations
-    with an admin account that has the wrong permissions.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_WRONG_PERMISSION)
-        else:
-            return Account({
-                'email': 'user@ncsu.edu',
-                'campus_id': '200101234',
-                'authorizations': {
-                    'test-app': {
-                        'access': True
-                    }
-                }
-            })
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_WRONG_PERMISSION)
-    response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {}
-                          })
-
-    assert response.status_code == 400
-
-
-def test_add_update_authorization_without_permission(monkeypatch):
-    """
-    It should fail to add to a user's authorizations if the requester
-    does not have permission.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_NO_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_NO_PERMISSION)
-    response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {'access': True}
-                          })
-
-    assert response.status_code == 400
-
-
-def test_subtract_update_authorization_without_permission(monkeypatch):
-    """
-    It should fail to subtract from a user's authorizations if the requester
-    does not have permission.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_NO_PERMISSION)
-        else:
-            return Account({
-                'email': 'user@ncsu.edu',
-                'campus_id': '200101234',
-                'authorizations': {
-                    'test-app': {
-                        'access': True
-                    }
-                }
-            })
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_NO_PERMISSION)
-    response = client.put('/update-authorization',
-                          headers={'Authorization': f'Bearer {token}'},
-                          json={
-                              'email': 'user@ncsu.edu',
-                              'app_id': 'test-app',
-                              'authorization': {}
-                          })
-
-    assert response.status_code == 400
-
-
-def test_delete_authorization(monkeypatch):
-    """It should ensure a user's authorization can be deleted."""
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_FULL_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_FULL_PERMISSION)
-    response = client.delete(
-        '/delete-authorization?app_id=test-app&email=user@ncsu.edu',
-        headers={'Authorization': f'Bearer {token}'})
-
-    assert response.status_code == 200
-    assert response.json() == {'authorizations': {}}
-
-
-def test_delete_authorization_with_some_permission(monkeypatch):
-    """
-    It should fail to delete a user's authorizations if the requester
-    does not have superuser permission.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_SOME_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_SOME_PERMISSION)
-    response = client.delete(
-        '/delete-authorization?app_id=test-app&email=user@ncsu.edu',
-        headers={'Authorization': f'Bearer {token}'})
-
-    assert response.status_code == 400
-
-
-def test_delete_authorization_with_wrong_permission(monkeypatch):
-    """
-    It should fail to delete a user's authorizations if the requester
-    does not have superuser permission.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_WRONG_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_WRONG_PERMISSION)
-    response = client.delete(
-        '/delete-authorization?app_id=test-app&email=user@ncsu.edu',
-        headers={'Authorization': f'Bearer {token}'})
-
-    assert response.status_code == 400
-
-
-def test_delete_authorization_without_permission(monkeypatch):
-    """
-    It should fail to delete a user's authorizations if the requester
-    does not have superuser permission.
-    """
-
-    def mock_find_by_email(email):
-        """Mock Account.find_by_email function."""
-        if email == 'admin@ncsu.edu':
-            return Account(ADMIN_ACCOUNT_NO_PERMISSION)
-        else:
-            return Account(REGULAR_ACCOUNT_NO_AUTHORIZATIONS)
-
-    def mock_update(*_, **__):
-        """Mock Account.update function."""
-        return
-
-    monkeypatch.setattr(Account, "find_by_email", mock_find_by_email)
-    monkeypatch.setattr(Account, "update", mock_update)
-
-    token = Token.generate_token(ADMIN_ACCOUNT_NO_PERMISSION)
-    response = client.delete(
-        '/delete-authorization?app_id=test-app&email=user@ncsu.edu',
-        headers={'Authorization': f'Bearer {token}'})
-
-    assert response.status_code == 400

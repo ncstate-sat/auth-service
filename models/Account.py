@@ -60,13 +60,12 @@ class Account:
 
         :param filter: The attribute that should be searched.
         """
-        db_accounts = AuthDB.get_account_by_role(role)
+        db_accounts = AuthDB.get_accounts_by_role(role)
 
         accounts = []
         for account in db_accounts:
             accounts.append(Account(config=account))
 
-        print(accounts)
         return accounts
 
     @staticmethod

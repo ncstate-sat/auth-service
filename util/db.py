@@ -71,7 +71,7 @@ class AuthDB:
         return account_data
 
     @classmethod
-    def get_account_by_role(cls, value: str) -> list[dict]:
+    def get_accounts_by_role(cls, value: str) -> list[dict]:
         """
         Finds all accounts from the mongo database that have a given
         authorization.
@@ -131,10 +131,13 @@ class AuthDB:
         """
         cls.__setup_database()
 
-        account.copy().pop('authorizations')
+        account_copy = account.copy()
+        if account_copy.get('authorizations', False):
+            account_copy.pop('authorizations')
+
         return cls.account_collection.update_one({
-            'email': account['email']},
-            {'$set': account})
+            'email': account_copy['email']},
+            {'$set': account_copy})
 
     @classmethod
     def delete_account(cls, account: dict):

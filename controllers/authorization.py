@@ -82,7 +82,11 @@ def update_authorization(response: Response,
             'error': 'This account is not authorized to write to this user\'s authorization(s).'
         }
 
-    account.__dict__.copy().pop('authorizations')
+    account_response = account.__dict__.copy()
+
+    if account_response.get('authorizations', False):
+        account_response.pop('authorizations')
+
     return {
-        'account': account.__dict__
+        'account': account_response
     }
