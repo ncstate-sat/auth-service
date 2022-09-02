@@ -19,7 +19,7 @@ class UpdateAuthorizationRequestBody(BaseModel):
 def get_accounts_with_role(response: Response,
                                     role: str,
                                     authorization: str = Header(default=None)):
-    """Gets all accounts with specified authorizations.
+    """Gets all accounts with specified roles.
 
     It may be necessary to query all accounts with a certain
     authorization. This endpoint can query accounts and return that
@@ -49,14 +49,7 @@ def get_accounts_with_role(response: Response,
 def update_authorization(response: Response,
                          body: UpdateAuthorizationRequestBody,
                          authorization: str = Header(default=None)):
-    """Updates the authorization for a user for a given app.
-
-    Apps can store data under each account regarding authorization.
-    Apps can pass a dictionary to this endpoint which will be stored in
-    the user's account. If no record exists for the app ID, a new
-    record will be created. If a record already exists, it will be
-    replaced with the new data.
-    """
+    """Adds or removes roles granted to accounts."""
 
     # Get write permissions of the requesting account.
     requesting_account = Token.decode_token(authorization.split(' ')[1])

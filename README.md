@@ -11,7 +11,7 @@ This service handles all authentication and authorization needs for SAT applicat
 - `PASSWORD_TITLE`: The title of the password to use for the MongoDB database.
 
 ## Other Requirements
-A MongoDB database is required for this service to work. The database name should be `Accounts`, and it should contain one collection called `accounts`. A MongoDB instance can be spun up easily with docker:
+A MongoDB database is required for this service to work. The database name should be `Accounts`, and it should contain two collections called `accounts` and `roles`. A MongoDB instance can be spun up easily with docker:
 ```
 docker run -p 27017:27017 --name auth-db -d mongo
 ```
