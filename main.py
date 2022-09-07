@@ -17,46 +17,18 @@ Handle authentication and authorization in your NCSU app. Sign in with Google an
 Right now, only Google Sign In is supported. More ways to sign in can be added in the future. When a token from Google is passed into the appropriate endpoint, a new token is generated with the user's data. That new token is sent back to the client, and it is that token which is used between the services. The Google token is only used once to initially authenticate.
 
 ## Authorization
-The payload of the token contains the user's email address, campus ID, and their authorizations. The authorization component is a dictionary where each key represents an application, and the value is whatever that app wants to store. Here's what a payload could look like:
+The payload of the token contains the user's email address, campus ID, their roles, and their authorizations. Here's what a payload could look like:
 ```
 {
     "email": "user@ncsu.edu",
     "campus_id: "200101234",
-    "authorizations": {
-        "some-app": {
-            "role": "admin"
-        }
+    "roles": ["admin"],
+    "authorizations: {
+        root: true
     }
 }
 ```
-Each app can use the authorization endpoints to create and update whatever data they want for each user account. Each app can store whatever it wants inside its dictionary. There are, however, two reserved keys for use by this service. These values are `_read` and `_write`. These are both dictionaries themselves, and they store the authorizations for that app that the user is allowed to read and write to for any user. For example, if a user is allowed to read and write to the `role` authorization for any user, their authorization payload may look like this:
-```
-{
-    "some-app": {
-        "role": "admin",
-        "_read": {
-            "role": True 
-        },
-        "_write": {
-            "role": True
-        }
-    }
-}
-```
-If the user should have full read and write access to any and all authorizations, there is a `_superuser` key that works too:
-```
-{
-    "some-app": {
-        "role": "admin",
-        "_read": {
-            "_superuser": True 
-        },
-        "_write": {
-            "_superuser": True
-        }
-    }
-}
-```
+Each role has a number of authorizations tied to it. These authorizations are set up in the `roles` collection and can be changed at any time. Users can be assigned any number or roles, and they will inherit every authorization granted in each role. The authorizations set up in each role are arbitrary and can be set up as needed for each service.
 
 ## Token Expiration & Refresh
 Each auth JWT expires 15 minutes after it's generated. After expiring, the token is useless. To keep using the apps and services, a new token will have to be generated. So the user doesn't have to sign in every 15 minutes, a refresh token is used. Upon signing in, an auth token and refresh token is sent to the client. After the auth token expires, the refresh token can be used to generate another auth token. That refresh token expires 2 days after being generated, and it's replaced every time the auth token is replaced.

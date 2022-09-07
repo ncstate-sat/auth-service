@@ -7,6 +7,7 @@ class Account:
     """The Account model handles CRUD functions for accounts."""
     email = None
     campus_id = None
+    roles = []
     authorizations = {}
 
     def __init__(self, config):
@@ -14,6 +15,8 @@ class Account:
             self.email = config['email']
         if 'campus_id' in config:
             self.campus_id = config['campus_id']
+        if 'roles' in config:
+            self.roles = list(set(config['roles']))
         if 'authorizations' in config:
             self.authorizations = config['authorizations']
 
@@ -21,40 +24,27 @@ class Account:
         """Updates this instance in the database."""
         return AuthDB.update_account(self.__dict__)
 
+    def add_role(self, role):
+        """Adds a role to this user if it is not already added."""
+        if role not in self.roles:
+            self.roles.append(role)
+
+    def remove_role(self, role):
+        """Removes a role from this user, if they have it."""
+        if role in self.roles:
+            self.roles.remove(role)
+
     def delete(self):
         """Deletes this instance from the database."""
         return AuthDB.delete_account(self.__dict__)
-
-    def get_authorization(self, service_name: str):
-        """Returns the authorization data given a service name. Does not """
-        return self.authorizations[service_name]
-
-    def update_authorization(self, service_name: str, new_authorizations: dict):
-        """Updates an authorization record given a service name."""
-        read_values = new_authorizations.pop('_read', {})
-        write_values = new_authorizations.pop('_write', {})
-
-        self.authorizations[service_name] = self.authorizations.get(
-            service_name, {}) | new_authorizations
-        self.authorizations[service_name]['_read'] = self.authorizations.get(
-            service_name, {}).get('_read', {}) | read_values
-        self.authorizations[service_name]['_write'] = self.authorizations.get(
-            service_name, {}).get('_write', {}) | write_values
-        return
-
-    def remove_authorization(self, service_name: str):
-        """Removes an authorization record given a service name."""
-        if service_name in self.authorizations:
-            return self.authorizations.pop(service_name)
-        else:
-            raise RuntimeError('This service does not exist in this authorization.')
 
     @staticmethod
     def find_by_email(email):
         """
         Finds an account given an email address.
 
-        :param email: The email addres of the account.
+        Parameters:
+            email: The email address of the account.
         """
         db_account = AuthDB.get_account_by_email(email)
         if db_account is None:
@@ -64,13 +54,14 @@ class Account:
             return Account(config=db_account)
 
     @staticmethod
-    def find_by_authorization(app_id, db_filter, value):
+    def find_by_role(role):
         """
         Finds accounts given authorization data.
 
         :param filter: The attribute that should be searched.
         """
-        db_accounts = AuthDB.get_account_by_authorization(f'authorizations.{app_id}.{db_filter}', value)
+        db_accounts = AuthDB.get_accounts_by_role(role)
+
         accounts = []
         for account in db_accounts:
             accounts.append(Account(config=account))
@@ -78,7 +69,7 @@ class Account:
         return accounts
 
     @staticmethod
-    def create_account(email, campus_id, authorizations=None):
+    def create_account(email, campus_id, roles=None):
         """
         Creates a new account in the database.
 
@@ -86,9 +77,9 @@ class Account:
         :param campus_id: The campus ID of the new account.
         :param authorizations: The authorization data of the account.
         """
-        if authorizations is None:
-            authorizations = {}
+        if roles is None:
+            roles = []
         account_data = {'email': email, 'campus_id': campus_id,
-                        'authorizations': authorizations}
+                        'roles': roles}
         AuthDB.create_account(account_data)
         return Account(config=account_data)
