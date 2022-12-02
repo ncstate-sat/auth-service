@@ -1,8 +1,6 @@
 load('ext://secret', 'secret_from_dict')
 load('ext://dotenv', 'dotenv')
-load('ext://namespace', 'namespace_create', 'namespace_inject')
 dotenv()
-namespace_create('auth-service')
 
 # Configure docker build with live-updates
 docker_build(
