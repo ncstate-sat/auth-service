@@ -31,15 +31,15 @@ spec:
                       - name: MONGODB_URL
                         valueFrom:
                             secretKeyRef:
-                                name: mongodb-url
-                                key: password
+                                name: auth-service-secrets
+                                key: MONGODB_URL
                       - name: JWT_SECRET
                         valueFrom:
                             secretKeyRef:
-                                name: jwt-secret
-                                key: password
+                                name: auth-service-secrets
+                                key: JWT_SECRET
                       - name: PASSWORD_API_KEY
                         valueFrom:
                             secretKeyRef:
-                                name: password-state-api-key
-                                key: password
+                                name: auth-service-secrets
+                                key: PASSWORD_API_KEY

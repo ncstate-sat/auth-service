@@ -1,7 +1,3 @@
-load('ext://secret', 'secret_from_dict')
-load('ext://dotenv', 'dotenv')
-dotenv()
-
 # Configure docker build with live-updates
 docker_build(
     'auth-service',
@@ -25,28 +21,6 @@ for o in manifest:
 
 k8s_yaml(encode_yaml_stream(manifest))
 
-secret_env_map = {
-    'google-client-id': 'GOOGLE_CLIENT_ID',
-    'jwt-secret': 'JWT_SECRET',
-    'mongodb-url': 'MONGODB_URL',
-    'api-key': 'API_KEY',
-    'mongo-password-id': 'MONGO_PASSWORD_ID',
-    'password-api-base-url': 'PASSWORD_API_BASE_URL',
-    'password-state-api-key': 'PASSWORD_API_KEY',
-    'password-api-list-id': 'PASSWORD_API_LIST_ID',
-    'password-title': 'PASSWORD_TITLE',
-}
-
-# Load secrets from environment variables
-# Load them as YAML
-for k, v in secret_env_map.items():
-    value = os.getenv(v)
-    k8s_yaml(secret_from_dict(
-        k, # name of the secret
-        'auth-service', # namespace
-        inputs={
-            'password': value
-        }
-    ))
+k8s_yaml(kustomize('.'))
 
 k8s_resource('auth-service', port_forwards='8003:8000', labels=['service'])

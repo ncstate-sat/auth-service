@@ -1,0 +1,7 @@
+namespace: auth-service
+secretGenerator:
+    - name: auth-service-secrets
+      envs:
+          - .env
+generatorOptions:
+    disableNameSuffixHash: true
