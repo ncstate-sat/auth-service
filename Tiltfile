@@ -5,7 +5,7 @@ docker_build(
     live_update=[
         sync('.', '/app'),
         run(
-            'pip install -r /app/requirements.txt',
+            'pip install -r /app/requirements.txt  --extra-index-url https://pypi.ehps.ncsu.edu',
             trigger=['./requirements.txt']
        )
     ],
