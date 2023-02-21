@@ -1,6 +1,7 @@
 import os
 import jwt
 from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_auth_requests
 
@@ -21,7 +22,13 @@ class Token:
         """Decodes a JSON Web Token from this Auth Service.
         :param token: The token from this service.
         """
-        return jwt.decode(token, os.getenv('JWT_SECRET'), ['HS256'])
+        try:
+            return jwt.decode(token, os.getenv('JWT_SECRET'), ['HS256'])
+        except jwt.exceptions.ExpiredSignatureError:
+            raise HTTPException(401, detail="Token is expired")
+        except jwt.exceptions.InvalidSignatureError:
+            raise HTTPException(400, detail=("Token has an invalid signature. "
+                                             "Check the JWT_SECRET variable."))
 
     @staticmethod
     def generate_token(payload):
@@ -40,9 +47,9 @@ class Token:
         """
         return jwt.encode({'email': email, 'exp': datetime.now(tz=timezone.utc) + REFRESH_TOKEN_EXP_TIME}, os.getenv('JWT_SECRET'), 'HS256')
 
-    @staticmethod
-    def decode_refresh_token(token):
+    @classmethod
+    def decode_refresh_token(cls, token):
         """Decodes a refresh JWT from this Auth Service.
         :param token: The refresh token from this service.
         """
-        return jwt.decode(token, os.getenv('JWT_SECRET'), ['HS256'])
+        return cls.decode_token(token)
