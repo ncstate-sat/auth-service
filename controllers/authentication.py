@@ -39,7 +39,7 @@ def google_login(response: Response, body: TokenRequestBody):
 
 
 @router.post('/login', tags=['Authentication'])
-def login(response: Response, authorization: str = Header(default=None)):
+def login(authorization: str = Header(default=None)):
     """Returns the payload of the token.
 
     The token, supplied by this service, is passed in. Returned is the payload that was contained in the token.
@@ -51,15 +51,9 @@ def login(response: Response, authorization: str = Header(default=None)):
 
     return payload
 
-    # except:
-    #     response.status_code = status.HTTP_401_UNAUTHORIZED
-    #     return {
-    #         'message': 'Not Authenticated'
-    #     }
-
 
 @router.post('/refresh-token', tags=['Authentication'])
-def refresh_token(response: Response, body: TokenRequestBody):
+def refresh_token(body: TokenRequestBody):
     """Returns a new token and refresh token.
 
     The JWT used for authentication expires 15 minutes after it's generated. The refresh token can be used to extend the user's session with the app without asking them to sign back in. This function takes a refresh token, and it returns a new auth token (expires in 15 minutes) and a new refresh token.
@@ -75,9 +69,3 @@ def refresh_token(response: Response, body: TokenRequestBody):
         'refresh_token': new_refresh_token,
         'payload': account.__dict__
     }
-
-    # except:
-    #     response.status_code = status.HTTP_401_UNAUTHORIZED
-    #     return {
-    #         'message': 'Refresh Token Expired'
-    #     }
