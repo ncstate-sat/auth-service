@@ -15,7 +15,7 @@ spec:
         spec:
             containers:
                 - name: auth-service
-                  image: satregistry.ehps.ncsu.edu:7001/auth-service/auth-service
+                  image: satregistry.ehps.university.edu:7001/auth-service/auth-service
                   imagePullPolicy: Always
                   env:
                       - name: GOOGLE_CLIENT_ID
@@ -23,7 +23,7 @@ spec:
                       - name: MONGO_PASSWORD_ID
                         value: "5678"
                       - name: PASSWORD_API_BASE_URL
-                        value: "https://password.ehps.ncsu.edu"
+                        value: "https://password.ehps.university.edu"
                       - name: PASSWORD_API_LIST_ID
                         value: "2172"
                       - name: PASSWORD_TITLE
