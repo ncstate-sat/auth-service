@@ -1,45 +1,94 @@
 apiVersion: apps/v1
+kind: Namespace
+metadata:
+  name: auth-service
+
+---
+
+apiVersion: apps/v1
 kind: Deployment
 metadata:
-    name: auth-service
-    namespace: auth-service
+  name: auth-service
+  namespace: auth-service
 spec:
-    selector:
-        matchLabels:
-            app: auth-service
-    replicas: 1
-    template:
-        metadata:
-            labels:
-                app: auth-service
-        spec:
-            containers:
-                - name: auth-service
-                  image: satregistry.ehps.ncsu.edu:7001/auth-service/auth-service
-                  imagePullPolicy: Always
-                  env:
-                      - name: GOOGLE_CLIENT_ID
-                        value: "4944492663-6msau4peegvm3oqa9pbgsmncorfkj5sa.apps.googleusercontent.com"
-                      - name: MONGO_PASSWORD_ID
-                        value: "5678"
-                      - name: PASSWORD_API_BASE_URL
-                        value: "https://password.ehps.ncsu.edu"
-                      - name: PASSWORD_API_LIST_ID
-                        value: "2172"
-                      - name: PASSWORD_TITLE
-                        value: "accountsvc_test"
-                      - name: MONGODB_URL
-                        valueFrom:
-                            secretKeyRef:
-                                name: auth-service-secrets
-                                key: MONGODB_URL
-                      - name: JWT_SECRET
-                        valueFrom:
-                            secretKeyRef:
-                                name: auth-service-secrets
-                                key: JWT_SECRET
-                      - name: PASSWORD_API_KEY
-                        valueFrom:
-                            secretKeyRef:
-                                name: auth-service-secrets
-                                key: PASSWORD_API_KEY
+  selector:
+    matchLabels:
+      app: auth-service
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: auth-service
+      annotations:
+        enable.version-checker.io/auth-service: "true"
+    spec:
+      containers:
+      - name: auth-service
+        image: registry.com/auth-service/auth-service
+        imagePullPolicy: Always
+        env:
+        - name: GOOGLE_CLIENT_ID
+          value: "1234-567890.apps.googleusercontent.com"
+        - name: MONGO_PASSWORD_ID
+          value: "5678"
+        - name: PASSWORD_API_BASE_URL
+          value: "https://passwordstate.com"
+        - name: PASSWORD_API_LIST_ID
+          value: "2100"
+        - name: PASSWORD_TITLE
+          value: "my_password"
+        - name: MONGODB_URL
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: MONGODB_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: JWT_SECRET
+        - name: PASSWORD_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: PASSWORD_API_KEY
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: auth-service
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - port: 8000
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-service
+  namespace: auth-service
+  annotations:
+    kubernetes.io/ingress.class: public
+    cert-manager.io/cluster-issuer: sectigo-test
+spec:
+  rules:
+    - host: auth.services.university.edu
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: auth-service
+              port:
+                number: 8000
+  tls:
+    - hosts:
+      - auth.services.university.edu
+      secretName: auth-tls

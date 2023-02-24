@@ -11,7 +11,7 @@ load_dotenv()
 
 
 DESCRIPTION = """
-Handle authentication and authorization in your NCSU app. Sign in with Google and get back a token that will authenticate the user across multiple services and keep track of all authorizations across all of those services.
+Handle authentication and authorization in your app. Sign in with Google and get back a token that will authenticate the user across multiple services and keep track of all authorizations across all of those services.
 
 ## Authentication Methods
 Right now, only Google Sign In is supported. More ways to sign in can be added in the future. When a token from Google is passed into the appropriate endpoint, a new token is generated with the user's data. That new token is sent back to the client, and it is that token which is used between the services. The Google token is only used once to initially authenticate.
@@ -20,7 +20,7 @@ Right now, only Google Sign In is supported. More ways to sign in can be added i
 The payload of the token contains the user's email address, campus ID, their roles, and their authorizations. Here's what a payload could look like:
 ```
 {
-    "email": "user@ncsu.edu",
+    "email": "user@university.edu",
     "campus_id: "200101234",
     "roles": ["admin"],
     "authorizations: {
@@ -37,7 +37,7 @@ Each auth JWT expires 15 minutes after it's generated. After expiring, the token
 app = FastAPI(
     title='Auth Service',
     description=DESCRIPTION,
-    version="1.0.0"
+    version="1.0.1"
 )
 
 app.add_middleware(

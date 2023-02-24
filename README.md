@@ -1,6 +1,6 @@
 # Auth Service
 
-This service handles all authentication and authorization needs for SAT applications using JSON Web Tokens.
+This service handles all authentication and authorization needs for applications using JSON Web Tokens.
 
 ## Environment Variables
 
@@ -8,8 +8,8 @@ This service handles all authentication and authorization needs for SAT applicat
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | GOOGLE_CLIENT_ID\*      | This ID is required to decode Google Auth tokens, and it can be found in the Google Cloud Console.                                                                                                        | token.apps.googleusercontent.com          |
 | JWT_SECRET\*            | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                    | khMSpZkNsjwr                              |
-| MONGODB_URL\*           | The connection string to the MongoDB instance. The password for the database can be hardcoded into the string, or it can be replaced with "password" to be replaced with the password from Passwordstate. | mongodb://username:password@ehps.ncsu.edu |
-| PASSWORD_API_BASE_URL\* | The base URL for the Passwordstate API.                                                                                                                                                                   | https://password.ehps.ncsu.edu            |
+| MONGODB_URL\*           | The connection string to the MongoDB instance. The password for the database can be hardcoded into the string, or it can be replaced with "password" to be replaced with the password from Passwordstate. | mongodb://username:password@ehps.university.edu |
+| PASSWORD_API_BASE_URL\* | The base URL for the Passwordstate API.                                                                                                                                                                   | https://password.ehps.university.edu            |
 | PASSWORD_API_KEY\*      | The API Key used to authenticate with the Passwordstate API.                                                                                                                                              | khMSpZkNsjwr                              |
 | PASSWORD_API_LIST_ID\*  | The List ID for Passwordstate.                                                                                                                                                                            | 2172                                      |
 | PASSWORD_TITLE\*        | The title of the password to use for the MongoDB database.                                                                                                                                                | accountsvc_test                           |
@@ -38,7 +38,7 @@ docker run -p 27017:27017 --name auth-db -d mongo
 Documents in the `accounts` collection have three attributes (not including `_id`).
 | Name | Value | Type | Example |
 | --- | --- | --- | --- |
-| email | The full email address of the user. | String | user@ncsu.edu |
+| email | The full email address of the user. | String | user@university.edu |
 | campus_id | The campus_id of the account. | String | 000101234 |
 | roles | An array of roles assigned to the individual of the account. | Array[String] | [admin] |
 
@@ -74,7 +74,7 @@ The authorizations dictionary can have any values; they'll appear in the token p
 "accounts": [
     {
         "_id": ObjectId('asdf'),
-        "email": "user@ncsu.edu",
+        "email": "user@university.edu",
         "campus_id": "200103374",
         "roles": ["admin"]
     }

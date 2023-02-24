@@ -37,7 +37,7 @@ def get_accounts_with_role(response: Response,
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': 'This account is not authorized to write to this user\'s authorization(s).'
+            'error': f'This account is not authorized to read {role} authorizations.'
         }
 
     return {

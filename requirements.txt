@@ -8,3 +8,4 @@ requests
 pymongo
 pytest
 password-state-client
+httpx

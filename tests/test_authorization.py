@@ -1,8 +1,8 @@
 """Tests for the authorization controller functions."""
 
+import os
 from fastapi.testclient import TestClient
 from main import app
-from models.Account import Account
 from models.Token import Token
 from util.db import AuthDB
 
@@ -28,16 +28,32 @@ MEMBER_ROLE = {
 }
 
 ADMIN_ACCOUNT = {
-    'email': 'admin@ncsu.edu',
+    'email': 'admin@university.edu',
     'campus_id': '00101234',
     'roles': ['admin']
 }
 
 MEMBER_ACCOUNT = {
-    'email': 'member@ncsu.edu',
+    'email': 'member@university.edu',
     'campus_id': '00101235',
     'roles': ['member']
 }
+
+os.environ["JWT_SECRET"] = "TEST_SECRET"
+EXPIRED_JWT = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2Njg3MDU2NzMsImVtYWlsIj"
+    "oibG1lbmFAbmNzdS5lZHUiLCJjYW1wdXNfaWQiOiIwMDExMzI4MDgiLCJyb2xlcyI6WyJ0Z"
+    "XN0X3VzZXIiXSwiYXV0aG9yaXphdGlvbnMiOnsiYXV0aDEiOnRydWUsImF1dGgyIjp0cnVl"
+    "LCJhdXRoMyI6ZmFsc2UsIl9yZWFkIjpbXSwiX3dyaXRlIjpbXX19.UmLWB6Pf-hwQaHBdrg"
+    "Iq662_H1ZwAT1fWBzL1sfApIo"
+)
+INVALID_SIGNATURE_JWT = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjQwOTk3Mzc4MDAsImVtYWlsIj"
+    "oibG1lbmFAbmNzdS5lZHUiLCJjYW1wdXNfaWQiOiIwMDExMzI4MDgiLCJyb2xlcyI6WyJ0Z"
+    "XN0X3VzZXIiXSwiYXV0aG9yaXphdGlvbnMiOnsiYXV0aDEiOnRydWUsImF1dGgyIjp0cnVl"
+    "LCJhdXRoMyI6ZmFsc2UsInJvb3QiOnRydWUsIl9yZWFkIjpbXSwiX3dyaXRlIjpbXX19.qo"
+    "4DfBZaP-rHptkcwNqh4Lcmhn14ClJ4NK1sKC499pY"
+)
 
 
 def test_get_accounts_with_role(monkeypatch):
@@ -46,7 +62,7 @@ def test_get_accounts_with_role(monkeypatch):
     """
     def mock_get_account_by_email(*_, **__):
         return {
-            'email': 'admin@ncsu.edu',
+            'email': 'admin@university.edu',
             'campus_id': '00101234',
             'roles': ['admin'],
             'authorizations': {
@@ -59,7 +75,7 @@ def test_get_accounts_with_role(monkeypatch):
     def mock_get_accounts_by_role(*_, **__):
         return [
             {
-                'email': 'member@ncsu.edu',
+                'email': 'member@university.edu',
                 'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
@@ -95,6 +111,20 @@ def test_get_accounts_with_role(monkeypatch):
         'accounts': [expected_accounts]
     }
 
+    expired_response = client.get(
+        '/role-accounts?role=member',
+        headers={'Authorization': f'Bearer {EXPIRED_JWT}'}
+    )
+    assert expired_response.status_code == 401
+    assert 'accounts' not in expired_response.json()
+
+    invalid_response = client.get(
+                '/role-accounts?role=member',
+        headers={'Authorization': f'Bearer {INVALID_SIGNATURE_JWT}'}
+    )
+    assert invalid_response.status_code == 400
+    assert 'accounts' not in invalid_response.json()
+
 
 def test_get_account_with_role_unauthorized(monkeypatch):
     """
@@ -102,7 +132,7 @@ def test_get_account_with_role_unauthorized(monkeypatch):
     """
     def mock_get_account_by_email(*_, **__):
         return {
-            'email': 'member@ncsu.edu',
+            'email': 'member@university.edu',
             'campus_id': '00101235',
             'roles': ['member'],
             'authorizations': {
@@ -116,7 +146,7 @@ def test_get_account_with_role_unauthorized(monkeypatch):
     def mock_get_accounts_by_role(*_, **__):
         return [
             {
-                'email': 'admin@ncsu.edu',
+                'email': 'admin@university.edu',
                 'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
@@ -148,7 +178,7 @@ def test_get_account_with_role_unauthorized(monkeypatch):
 
     assert response.status_code == 400
     assert response.json() == {
-        'error': 'This account is not authorized to write to this user\'s authorization(s).'
+        'error': 'This account is not authorized to read admin authorizations.'
     }
 
 
@@ -157,9 +187,9 @@ def test_add_role(monkeypatch):
     It should be able to add a role to an account.
     """
     def mock_get_account_by_email(email):
-        if email == 'member@ncsu.edu':
+        if email == 'member@university.edu':
             return {
-                'email': 'member@ncsu.edu',
+                'email': 'member@university.edu',
                 'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
@@ -171,7 +201,7 @@ def test_add_role(monkeypatch):
             }
         else:
             return {
-                'email': 'admin@ncsu.edu',
+                'email': 'admin@university.edu',
                 'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
@@ -210,15 +240,37 @@ def test_add_role(monkeypatch):
         'account': expected_account_state
     }
 
+    expired_response = client.put(
+        '/update-account-roles',
+        headers={'Authorization': f'Bearer {EXPIRED_JWT}'},
+        json={
+            'email': MEMBER_ACCOUNT['email'],
+            'add_roles': ['admin']
+        }
+    )
+    assert expired_response.status_code == 401
+    assert 'account' not in expired_response.json()
+
+    invalid_response = client.put(
+        '/update-account-roles',
+        headers={'Authorization': f'Bearer {INVALID_SIGNATURE_JWT}'},
+        json={
+            'email': MEMBER_ACCOUNT['email'],
+            'add_roles': ['admin']
+        }
+    )
+    assert invalid_response.status_code == 400
+    assert 'account' not in invalid_response.json()
+
 
 def test_add_role_unauthorized(monkeypatch):
     """
     It should fail to add roles to an account if the requesting account does not have authorization.
     """
     def mock_get_account_by_email(email):
-        if email == 'member@ncsu.edu':
+        if email == 'member@university.edu':
             return {
-                'email': 'member@ncsu.edu',
+                'email': 'member@university.edu',
                 'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
@@ -230,7 +282,7 @@ def test_add_role_unauthorized(monkeypatch):
             }
         else:
             return {
-                'email': 'admin@ncsu.edu',
+                'email': 'admin@university.edu',
                 'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
@@ -275,9 +327,9 @@ def test_remove_role(monkeypatch):
     It should be able to remove multiple roles from an account.
     """
     def mock_get_account_by_email(email):
-        if email == 'member@ncsu.edu':
+        if email == 'member@university.edu':
             return {
-                'email': 'member@ncsu.edu',
+                'email': 'member@university.edu',
                 'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
@@ -289,7 +341,7 @@ def test_remove_role(monkeypatch):
             }
         else:
             return {
-                'email': 'admin@ncsu.edu',
+                'email': 'admin@university.edu',
                 'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
@@ -321,7 +373,7 @@ def test_remove_role(monkeypatch):
     )
 
     expected_account_state = {
-        'email': 'member@ncsu.edu',
+        'email': 'member@university.edu',
         'campus_id': '00101235',
         'roles': []
     }
@@ -337,9 +389,9 @@ def test_remove_role_unauthorized(monkeypatch):
     It should fail to remove roles if the requesting account does not have permission.
     """
     def mock_get_account_by_email(email):
-        if email == 'member@ncsu.edu':
+        if email == 'member@university.edu':
             return {
-                'email': 'member@ncsu.edu',
+                'email': 'member@university.edu',
                 'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
@@ -351,7 +403,7 @@ def test_remove_role_unauthorized(monkeypatch):
             }
         else:
             return {
-                'email': 'admin@ncsu.edu',
+                'email': 'admin@university.edu',
                 'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
@@ -393,9 +445,9 @@ def test_add_and_remove_roles(monkeypatch):
     It should be able to add and remove roles for an account.
     """
     def mock_get_account_by_email(email):
-        if email == 'member@ncsu.edu':
+        if email == 'member@university.edu':
             return {
-                'email': 'member@ncsu.edu',
+                'email': 'member@university.edu',
                 'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
@@ -407,7 +459,7 @@ def test_add_and_remove_roles(monkeypatch):
             }
         else:
             return {
-                'email': 'admin@ncsu.edu',
+                'email': 'admin@university.edu',
                 'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
@@ -440,7 +492,7 @@ def test_add_and_remove_roles(monkeypatch):
     )
 
     expected_account_state = {
-        'email': 'member@ncsu.edu',
+        'email': 'member@university.edu',
         'campus_id': '00101235',
         'roles': ['admin']
     }
@@ -456,9 +508,9 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
     It should be able to add and remove roles for an account.
     """
     def mock_get_account_by_email(email):
-        if email == 'member@ncsu.edu':
+        if email == 'member@university.edu':
             return {
-                'email': 'member@ncsu.edu',
+                'email': 'member@university.edu',
                 'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
@@ -470,7 +522,7 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
             }
         else:
             return {
-                'email': 'admin@ncsu.edu',
+                'email': 'admin@university.edu',
                 'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
