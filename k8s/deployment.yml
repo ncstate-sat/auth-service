@@ -29,14 +29,6 @@ spec:
         env:
         - name: GOOGLE_CLIENT_ID
           value: "1234-567890.apps.googleusercontent.com"
-        - name: MONGO_PASSWORD_ID
-          value: "5678"
-        - name: PASSWORD_API_BASE_URL
-          value: "https://passwordstate.com"
-        - name: PASSWORD_API_LIST_ID
-          value: "2100"
-        - name: PASSWORD_TITLE
-          value: "my_password"
         - name: MONGODB_URL
           valueFrom:
             secretKeyRef:

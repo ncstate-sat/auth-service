@@ -4,7 +4,6 @@ CRUD functions for the database.
 
 import os
 from pymongo import MongoClient
-import passwords
 
 
 class AuthDB:
@@ -14,18 +13,9 @@ class AuthDB:
 
     @classmethod
     def __setup_database(cls):
-        """Gets password from Passwordstate."""
+        """Gets 'accounts' and 'roles' collections from MongoDB."""
         if cls.account_collection is None or cls.role_collection is None:
-            passwordstate = passwords.PasswordstateLookup(
-                os.getenv('PASSWORD_API_BASE_URL'),
-                os.getenv('PASSWORD_API_KEY'))
-            password_data = passwordstate.get_pw_by_title(
-                os.getenv('PASSWORD_API_LIST_ID'),
-                os.getenv('PASSWORD_TITLE'))
-            mongo_connection = os.getenv('MONGODB_URL')
-            client = MongoClient(mongo_connection.replace(
-                'password', password_data))
-
+            client = MongoClient(os.getenv('MONGODB_URL'))
             cls.account_collection = client['Accounts'].get_collection(
                 'accounts')
             cls.role_collection = client['Accounts'].get_collection(
