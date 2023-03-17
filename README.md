@@ -8,7 +8,7 @@ This service handles all authentication and authorization needs for applications
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | GOOGLE_CLIENT_ID\*      | This ID is required to decode Google Auth tokens, and it can be found in the Google Cloud Console.                                                                                                        | token.apps.googleusercontent.com          |
 | JWT_SECRET\*            | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                    | khMSpZkNsjwr                              |
-| MONGODB_URL\*           | The connection string to the MongoDB instance. The password for the database can be hardcoded into the string, or it can be replaced with "password" to be replaced with the password from Passwordstate. | mongodb://username:password@ehps.university.edu |
+| MONGODB_URL\*           | The connection string to the MongoDB instance.  | mongodb://username:mypassword@ehps.university.edu |
 
 ## Minimum Database Requirements
 
