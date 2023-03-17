@@ -9,10 +9,6 @@ This service handles all authentication and authorization needs for applications
 | GOOGLE_CLIENT_ID\*      | This ID is required to decode Google Auth tokens, and it can be found in the Google Cloud Console.                                                                                                        | token.apps.googleusercontent.com          |
 | JWT_SECRET\*            | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                    | khMSpZkNsjwr                              |
 | MONGODB_URL\*           | The connection string to the MongoDB instance. The password for the database can be hardcoded into the string, or it can be replaced with "password" to be replaced with the password from Passwordstate. | mongodb://username:password@ehps.university.edu |
-| PASSWORD_API_BASE_URL\* | The base URL for the Passwordstate API.                                                                                                                                                                   | https://password.ehps.university.edu            |
-| PASSWORD_API_KEY\*      | The API Key used to authenticate with the Passwordstate API.                                                                                                                                              | khMSpZkNsjwr                              |
-| PASSWORD_API_LIST_ID\*  | The List ID for Passwordstate.                                                                                                                                                                            | 2172                                      |
-| PASSWORD_TITLE\*        | The title of the password to use for the MongoDB database.                                                                                                                                                | accountsvc_test                           |
 
 ## Minimum Database Requirements
 
