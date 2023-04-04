@@ -29,13 +29,11 @@ MEMBER_ROLE = {
 
 ADMIN_ACCOUNT = {
     'email': 'admin@university.edu',
-    'campus_id': '00101234',
-    'roles': ['admin']
+    'roles': ['Admin']
 }
 
 MEMBER_ACCOUNT = {
     'email': 'member@university.edu',
-    'campus_id': '00101235',
     'roles': ['member']
 }
 
@@ -63,7 +61,6 @@ def test_get_accounts_with_role(monkeypatch):
     def mock_get_account_by_email(*_, **__):
         return {
             'email': 'admin@university.edu',
-            'campus_id': '00101234',
             'roles': ['admin'],
             'authorizations': {
                 'root': True,
@@ -76,7 +73,6 @@ def test_get_accounts_with_role(monkeypatch):
         return [
             {
                 'email': 'member@university.edu',
-                'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
                     'can_do_x': True,
@@ -133,7 +129,6 @@ def test_get_account_with_role_unauthorized(monkeypatch):
     def mock_get_account_by_email(*_, **__):
         return {
             'email': 'member@university.edu',
-            'campus_id': '00101235',
             'roles': ['member'],
             'authorizations': {
                 'can_do_x': True,
@@ -147,7 +142,6 @@ def test_get_account_with_role_unauthorized(monkeypatch):
         return [
             {
                 'email': 'admin@university.edu',
-                'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
                     'root': True,
@@ -190,7 +184,6 @@ def test_add_role(monkeypatch):
         if email == 'member@university.edu':
             return {
                 'email': 'member@university.edu',
-                'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
                     'can_do_x': True,
@@ -202,7 +195,6 @@ def test_add_role(monkeypatch):
         else:
             return {
                 'email': 'admin@university.edu',
-                'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
                     'root': True,
@@ -271,7 +263,6 @@ def test_add_role_unauthorized(monkeypatch):
         if email == 'member@university.edu':
             return {
                 'email': 'member@university.edu',
-                'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
                     'can_do_x': True,
@@ -283,7 +274,6 @@ def test_add_role_unauthorized(monkeypatch):
         else:
             return {
                 'email': 'admin@university.edu',
-                'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
                     'root': True,
@@ -330,7 +320,6 @@ def test_remove_role(monkeypatch):
         if email == 'member@university.edu':
             return {
                 'email': 'member@university.edu',
-                'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
                     'can_do_x': True,
@@ -342,7 +331,6 @@ def test_remove_role(monkeypatch):
         else:
             return {
                 'email': 'admin@university.edu',
-                'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
                     'root': True,
@@ -374,7 +362,6 @@ def test_remove_role(monkeypatch):
 
     expected_account_state = {
         'email': 'member@university.edu',
-        'campus_id': '00101235',
         'roles': []
     }
 
@@ -392,7 +379,6 @@ def test_remove_role_unauthorized(monkeypatch):
         if email == 'member@university.edu':
             return {
                 'email': 'member@university.edu',
-                'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
                     'can_do_x': True,
@@ -404,7 +390,6 @@ def test_remove_role_unauthorized(monkeypatch):
         else:
             return {
                 'email': 'admin@university.edu',
-                'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
                     'root': True,
@@ -448,7 +433,6 @@ def test_add_and_remove_roles(monkeypatch):
         if email == 'member@university.edu':
             return {
                 'email': 'member@university.edu',
-                'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
                     'can_do_x': True,
@@ -460,7 +444,6 @@ def test_add_and_remove_roles(monkeypatch):
         else:
             return {
                 'email': 'admin@university.edu',
-                'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
                     'root': True,
@@ -493,7 +476,6 @@ def test_add_and_remove_roles(monkeypatch):
 
     expected_account_state = {
         'email': 'member@university.edu',
-        'campus_id': '00101235',
         'roles': ['admin']
     }
 
@@ -511,7 +493,6 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
         if email == 'member@university.edu':
             return {
                 'email': 'member@university.edu',
-                'campus_id': '00101235',
                 'roles': ['member'],
                 'authorizations': {
                     'can_do_x': True,
@@ -523,7 +504,6 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
         else:
             return {
                 'email': 'admin@university.edu',
-                'campus_id': '00101234',
                 'roles': ['admin'],
                 'authorizations': {
                     'root': True,

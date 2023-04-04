@@ -9,7 +9,6 @@ client = TestClient(app)
 os.environ["JWT_SECRET"] = "TEST_SECRET"
 
 EMAIL = 'user@university.edu'
-CAMPUS_ID = '200101234'
 EXPIRED_JWT = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2Njg3MDU2NzMsImVtYWlsIj"
     "oibG1lbmFAbmNzdS5lZHUiLCJjYW1wdXNfaWQiOiIwMDExMzI4MDgiLCJyb2xlcyI6WyJ0Z"
@@ -31,7 +30,7 @@ def test_decode_google_token(monkeypatch):
         return {'email': EMAIL}
 
     def mock_find_by_email(*args, **kwargs):
-        return Account({'email': EMAIL, 'campus_id': CAMPUS_ID, 'authorizations': {}})
+        return Account({'email': EMAIL, 'authorizations': {}})
 
     monkeypatch.setattr(Token, 'decode_google_token', mock_decode_google_token)
     monkeypatch.setattr(Account, 'find_by_email', mock_find_by_email)
@@ -63,7 +62,7 @@ def test_decode_token():
 
 def test_refresh_token(monkeypatch):
     def mock_find_by_email(*args, **kwargs):
-        return Account({'email': EMAIL, 'campus_id': CAMPUS_ID, 'authorizations': {}})
+        return Account({'email': EMAIL, 'authorizations': {}})
 
     monkeypatch.setattr(Account, 'find_by_email', mock_find_by_email)
 
