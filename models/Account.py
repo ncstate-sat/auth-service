@@ -6,15 +6,12 @@ from util.db import AuthDB
 class Account:
     """The Account model handles CRUD functions for accounts."""
     email = None
-    campus_id = None
     roles = []
     authorizations = {}
 
     def __init__(self, config):
         if 'email' in config:
             self.email = config['email']
-        if 'campus_id' in config:
-            self.campus_id = config['campus_id']
         if 'roles' in config:
             self.roles = list(set(config['roles']))
         if 'authorizations' in config:
@@ -69,17 +66,16 @@ class Account:
         return accounts
 
     @staticmethod
-    def create_account(email, campus_id, roles=None):
+    def create_account(email, roles=None):
         """
         Creates a new account in the database.
 
         :param email: The email address of the account.
-        :param campus_id: The campus ID of the new account.
         :param authorizations: The authorization data of the account.
         """
         if roles is None:
             roles = []
-        account_data = {'email': email, 'campus_id': campus_id,
+        account_data = {'email': email,
                         'roles': roles}
         AuthDB.create_account(account_data)
         return Account(config=account_data)

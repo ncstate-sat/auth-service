@@ -17,11 +17,10 @@ Handle authentication and authorization in your app. Sign in with Google and get
 Right now, only Google Sign In is supported. More ways to sign in can be added in the future. When a token from Google is passed into the appropriate endpoint, a new token is generated with the user's data. That new token is sent back to the client, and it is that token which is used between the services. The Google token is only used once to initially authenticate.
 
 ## Authorization
-The payload of the token contains the user's email address, campus ID, their roles, and their authorizations. Here's what a payload could look like:
+The payload of the token contains the user's email address, their roles, and their authorizations. Here's what a payload could look like:
 ```
 {
     "email": "user@university.edu",
-    "campus_id: "200101234",
     "roles": ["admin"],
     "authorizations: {
         root: true

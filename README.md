@@ -35,7 +35,6 @@ Documents in the `accounts` collection have three attributes (not including `_id
 | Name | Value | Type | Example |
 | --- | --- | --- | --- |
 | email | The full email address of the user. | String | user@university.edu |
-| campus_id | The campus_id of the account. | String | 000101234 |
 | roles | An array of roles assigned to the individual of the account. | Array[String] | [admin] |
 
 ### Collection: `roles`
@@ -71,7 +70,6 @@ The authorizations dictionary can have any values; they'll appear in the token p
     {
         "_id": ObjectId('asdf'),
         "email": "user@university.edu",
-        "campus_id": "200103374",
         "roles": ["admin"]
     }
 ]
