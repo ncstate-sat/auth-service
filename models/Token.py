@@ -23,7 +23,7 @@ class Token:
         :param token: The token from this service.
         """
         try:
-            return jwt.decode(token, os.getenv('JWT_SECRET'), ['HS256'])
+            return jwt.decode(token, os.getenv('JWT_SECRET'), algorithms=['HS256'])
         except jwt.exceptions.ExpiredSignatureError:
             raise HTTPException(401, detail="Token is expired")
         except jwt.exceptions.InvalidSignatureError:

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from main import app
 from models.Token import Token
 from util.db import AuthDB
+from util.casbin_enforcer import reset_enforcer
 
 client = TestClient(app)
 
@@ -12,7 +13,7 @@ ADMIN_ROLE = {
     'name': 'admin',
     'authorizations': {
         'root': True,
-        '_read': ['admin, member'],
+        '_read': ['admin', 'member'],
         '_write': ['admin', 'member']
     }
 }
@@ -26,6 +27,8 @@ MEMBER_ROLE = {
         '_write': []
     }
 }
+
+ALL_ROLES = [ADMIN_ROLE, MEMBER_ROLE]
 
 ADMIN_ACCOUNT = {
     'email': 'admin@university.edu',
@@ -83,13 +86,10 @@ def test_get_accounts_with_role(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'get_accounts_by_role',
-                        mock_get_accounts_by_role)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'get_accounts_by_role', mock_get_accounts_by_role)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
@@ -115,7 +115,7 @@ def test_get_accounts_with_role(monkeypatch):
     assert 'accounts' not in expired_response.json()
 
     invalid_response = client.get(
-                '/role-accounts?role=member',
+        '/role-accounts?role=member',
         headers={'Authorization': f'Bearer {INVALID_SIGNATURE_JWT}'}
     )
     assert invalid_response.status_code == 400
@@ -151,24 +151,16 @@ def test_get_account_with_role_unauthorized(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'get_accounts_by_role',
-                        mock_get_accounts_by_role)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'get_accounts_by_role', mock_get_accounts_by_role)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
         '/role-accounts?role=admin',
         headers={'Authorization': f'Bearer {token}'}
     )
-
-    expected_accounts = MEMBER_ACCOUNT.copy()
-    expected_accounts.update({
-        'authorizations': MEMBER_ROLE['authorizations']
-    })
 
     assert response.status_code == 400
     assert response.json() == {
@@ -206,13 +198,10 @@ def test_add_role(monkeypatch):
     def mock_update_account(account_data):
         return account_data
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'update_account', mock_update_account)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -285,13 +274,10 @@ def test_add_role_unauthorized(monkeypatch):
     def mock_update_account(account_data):
         return account_data
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'update_account', mock_update_account)
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(
@@ -302,9 +288,6 @@ def test_add_role_unauthorized(monkeypatch):
             'add_roles': ['member']
         }
     )
-
-    expected_account_state = MEMBER_ACCOUNT.copy()
-    expected_account_state['roles'].append('admin')
 
     assert response.status_code == 400
     assert response.json() == {
@@ -342,13 +325,10 @@ def test_remove_role(monkeypatch):
     def mock_update_account(account_data):
         return account_data
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'update_account', mock_update_account)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -401,13 +381,10 @@ def test_remove_role_unauthorized(monkeypatch):
     def mock_update_account(account_data):
         return account_data
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'update_account', mock_update_account)
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(
@@ -455,13 +432,10 @@ def test_add_and_remove_roles(monkeypatch):
     def mock_update_account(account_data):
         return account_data
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'update_account', mock_update_account)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -515,13 +489,10 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
     def mock_update_account(account_data):
         return account_data
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    reset_enforcer()
+    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
+    monkeypatch.setattr(AuthDB, 'get_account_by_email', mock_get_account_by_email)
+    monkeypatch.setattr(AuthDB, 'update_account', mock_update_account)
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(

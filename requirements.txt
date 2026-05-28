@@ -4,7 +4,7 @@ pydantic
 PyJWT
 python-dotenv
 google-auth
-requests
 pymongo
 pytest
-httpx
+httpx2
+casbin

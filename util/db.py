@@ -141,6 +141,12 @@ class AuthDB:
         return cls.account_collection.delete_one({'email': account['email']})
 
     @classmethod
+    def get_all_roles(cls) -> list[dict]:
+        """Gets all roles from the database."""
+        cls.__setup_database()
+        return list(cls.role_collection.find({}, {'_id': 0}))
+
+    @classmethod
     def create_account(cls, account_data: dict):
         """
         Creates an account in the mongo database.
