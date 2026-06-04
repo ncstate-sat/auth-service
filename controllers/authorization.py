@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel
 from models.Token import Token
 from models.Account import Account
-from util.casbin_enforcer import get_enforcer, sync_user_roles
+from util.casbin_enforcer import get_enforcer
 
 router = APIRouter()
 
@@ -30,8 +30,8 @@ def get_accounts_with_role(response: Response,
     requesting_account = Account.find_by_email(requesting_account['email'])
 
     enforcer = get_enforcer()
-    sync_user_roles(enforcer, requesting_account.email, requesting_account.roles)
 
+    # Ask the enforcer whether this user is allowed to 'read' accounts in the given role.
     if enforcer.enforce(requesting_account.email, role, 'read'):
         accounts = Account.find_by_role(role)
     else:
@@ -54,21 +54,18 @@ def update_authorization(response: Response,
     requesting_account = Account.find_by_email(requesting_account['email'])
 
     enforcer = get_enforcer()
-    sync_user_roles(enforcer, requesting_account.email, requesting_account.roles)
-
     account = Account.find_by_email(body.email)
 
+    # Check that the requester has 'write' permission for every role they want to
+    # assign or revoke. A single missing permission rejects the entire request.
     can_assign_roles = all(enforcer.enforce(requesting_account.email, role, 'write') for role in body.add_roles)
     can_revoke_roles = all(enforcer.enforce(requesting_account.email, role, 'write') for role in body.remove_roles)
 
     if can_assign_roles and can_revoke_roles:
         for role in body.remove_roles:
             account.remove_role(role)
-            enforcer.delete_role_for_user(body.email, role)
         for role in body.add_roles:
             account.add_role(role)
-            enforcer.add_role_for_user(body.email, role)
-        account.update()
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {

@@ -2,11 +2,13 @@
 The starting point for the auth service.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from controllers.authentication import router as authentication_router
 from controllers.authorization import router as authorization_router
+from util.casbin_enforcer import get_enforcer, migrate_policies_from_mongodb
 load_dotenv()
 
 
@@ -33,10 +35,20 @@ Each role has a number of authorizations tied to it. These authorizations are se
 Each auth JWT expires 15 minutes after it's generated. After expiring, the token is useless. To keep using the apps and services, a new token will have to be generated. So the user doesn't have to sign in every 15 minutes, a refresh token is used. Upon signing in, an auth token and refresh token is sent to the client. After the auth token expires, the refresh token can be used to generate another auth token. That refresh token expires 2 days after being generated, and it's replaced every time the auth token is replaced.
 """
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # On startup, migrate existing MongoDB role/account data into Casbin if the
+    # casbin_rules collection is empty. This is a no-op after the first boot.
+    migrate_policies_from_mongodb(get_enforcer())
+    yield
+
+
 app = FastAPI(
     title='Auth Service',
     description=DESCRIPTION,
-    version="1.0.1"
+    version="1.0.1",
+    lifespan=lifespan
 )
 
 app.add_middleware(

@@ -8,3 +8,4 @@ pymongo
 pytest
 httpx2
 casbin
+casbin-pymongo-adapter

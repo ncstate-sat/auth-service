@@ -1,6 +1,7 @@
 """A model to handle account CRUD."""
 
 from util.db import AuthDB
+from util.casbin_enforcer import get_enforcer, build_authorizations
 
 
 class Account:
@@ -22,14 +23,16 @@ class Account:
         return AuthDB.update_account(self.__dict__)
 
     def add_role(self, role):
-        """Adds a role to this user if it is not already added."""
+        """Adds a role to this user if not already present. Persists to Casbin immediately."""
         if role not in self.roles:
             self.roles.append(role)
+            get_enforcer().add_role_for_user(self.email, role)
 
     def remove_role(self, role):
-        """Removes a role from this user, if they have it."""
+        """Removes a role from this user if present. Persists to Casbin immediately."""
         if role in self.roles:
             self.roles.remove(role)
+            get_enforcer().delete_role_for_user(self.email, role)
 
     def delete(self):
         """Deletes this instance from the database."""
@@ -45,25 +48,27 @@ class Account:
         """
         db_account = AuthDB.get_account_by_email(email)
         if db_account is None:
-            new_account = Account.create_account(email, None)
-            return new_account
-        else:
-            return Account(config=db_account)
+            return Account.create_account(email)
+
+        enforcer = get_enforcer()
+        roles = enforcer.get_roles_for_user(email)
+        all_roles = AuthDB.get_all_roles()
+        authorizations = build_authorizations(enforcer, roles, all_roles)
+
+        db_account['roles'] = roles
+        db_account['authorizations'] = authorizations
+        return Account(config=db_account)
 
     @staticmethod
     def find_by_role(role):
         """
-        Finds accounts given authorization data.
+        Finds all accounts that have a given role.
 
-        :param filter: The attribute that should be searched.
+        :param role: The role name to search by.
         """
-        db_accounts = AuthDB.get_accounts_by_role(role)
-
-        accounts = []
-        for account in db_accounts:
-            accounts.append(Account(config=account))
-
-        return accounts
+        enforcer = get_enforcer()
+        emails = enforcer.get_users_for_role(role)
+        return [Account.find_by_email(email) for email in emails]
 
     @staticmethod
     def create_account(email, roles=None):
@@ -71,11 +76,14 @@ class Account:
         Creates a new account in the database.
 
         :param email: The email address of the account.
-        :param authorizations: The authorization data of the account.
+        :param roles: Optional list of roles to assign immediately.
         """
-        if roles is None:
-            roles = []
-        account_data = {'email': email,
-                        'roles': roles}
-        AuthDB.create_account(account_data)
-        return Account(config=account_data)
+        AuthDB.create_account({'email': email})
+        account = Account(config={
+            'email': email,
+            'roles': [],
+            'authorizations': {'_read': [], '_write': []}
+        })
+        for role in (roles or []):
+            account.add_role(role)
+        return account

@@ -30,86 +30,16 @@ class AuthDB:
             email: The email address of the account.
 
         Returns:
-            The account data.
+            The account document (email only — roles and authorizations are owned by Casbin).
         """
         cls.__setup_database()
 
-        account_data: dict = cls.account_collection.find_one({'email': email})
-
+        account_data = cls.account_collection.find_one({'email': email})
         if account_data is not None:
-            authorization_data: list[dict] = cls.role_collection.find(
-                {'name': {'$in': account_data.get('roles', [])}})
-
-            authorizations = {}
-            read_roles = []
-            write_roles = []
-            for data in authorization_data:
-                data_read_roles = data.get('authorizations', {}).get('_read', [])
-                data_write_roles = data.get('authorizations', {}).get('_write', [])
-                data['authorizations'].pop('_read')
-                data['authorizations'].pop('_write')
-                data.pop('_id')
-                authorizations.update(data['authorizations'])
-                read_roles = read_roles + data_read_roles
-                write_roles = write_roles + data_write_roles
-
             account_data.pop('_id')
-            authorizations['_read'] = read_roles
-            authorizations['_write'] = write_roles
-            account_data['authorizations'] = authorizations
+            account_data.pop('roles', None)  # Roles are authoritative in Casbin, not MongoDB.
 
         return account_data
-
-    @classmethod
-    def get_accounts_by_role(cls, value: str) -> list[dict]:
-        """
-        Finds all accounts from the mongo database that have a given
-        authorization.
-
-        Parameters:
-            key: The key in the user's authorization data to test.
-            value: The value which will be true for all returned accounts.
-
-        Returns:
-            All accounts with the given authorization.
-        """
-        cls.__setup_database()
-
-        account_data: list[dict] = cls.account_collection.aggregate([
-            {
-                '$match': {'roles': value}
-            },
-            {
-                '$lookup': {
-                    'from': 'roles',
-                    'localField': 'roles',
-                    'foreignField': 'name',
-                    'as': 'authorizations'
-                }
-            }
-        ])
-
-        transformed_account_data = []
-        for data in account_data:
-            authorizations = {}
-            read_roles = []
-            write_roles = []
-            for auth in data['authorizations']:
-                data_read_roles = auth.get('authorizations', {}).get('_read', [])
-                data_write_roles = auth.get('authorizations', {}).get('_write', [])
-                auth['authorizations'].pop('_read')
-                auth['authorizations'].pop('_write')
-                authorizations.update(auth.get('authorizations', {}))
-                read_roles = read_roles + data_read_roles
-                write_roles = write_roles + data_write_roles
-
-            data.pop('_id')
-            authorizations['_read'] = read_roles
-            authorizations['_write'] = write_roles
-            data['authorizations'] = authorizations
-            transformed_account_data.append(data)
-
-        return transformed_account_data
 
     @classmethod
     def update_account(cls, account: dict):
@@ -122,8 +52,8 @@ class AuthDB:
         cls.__setup_database()
 
         account_copy = account.copy()
-        if account_copy.get('authorizations', False):
-            account_copy.pop('authorizations')
+        account_copy.pop('authorizations', None)
+        account_copy.pop('roles', None)  # Roles are owned by Casbin.
 
         return cls.account_collection.update_one({
             'email': account_copy['email']},
@@ -145,6 +75,12 @@ class AuthDB:
         """Gets all roles from the database."""
         cls.__setup_database()
         return list(cls.role_collection.find({}, {'_id': 0}))
+
+    @classmethod
+    def get_all_accounts(cls) -> list[dict]:
+        """Gets all accounts. Used during one-time Casbin policy migration."""
+        cls.__setup_database()
+        return list(cls.account_collection.find({}, {'_id': 0}))
 
     @classmethod
     def create_account(cls, account_data: dict):
