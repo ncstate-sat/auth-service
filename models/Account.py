@@ -1,7 +1,8 @@
 """A model to handle account CRUD."""
 
-from util.db import AuthDB
 from util.casbin_enforcer import get_enforcer, build_authorizations
+
+SENTINEL = '_user'
 
 
 class Account:
@@ -18,10 +19,6 @@ class Account:
         if 'authorizations' in config:
             self.authorizations = config['authorizations']
 
-    def update(self):
-        """Updates this instance in the database."""
-        return AuthDB.update_account(self.__dict__)
-
     def add_role(self, role):
         """Adds a role to this user if not already present. Persists to Casbin immediately."""
         if role not in self.roles:
@@ -35,29 +32,26 @@ class Account:
             get_enforcer().delete_role_for_user(self.email, role)
 
     def delete(self):
-        """Deletes this instance from the database."""
-        return AuthDB.delete_account(self.__dict__)
+        """Removes this account and all its role assignments from Casbin."""
+        get_enforcer().delete_roles_for_user(self.email)
 
     @staticmethod
     def find_by_email(email):
         """
-        Finds an account given an email address.
+        Finds an account given an email address. Auto-creates it on first sign-in.
 
         Parameters:
             email: The email address of the account.
         """
-        db_account = AuthDB.get_account_by_email(email)
-        if db_account is None:
+        enforcer = get_enforcer()
+        all_groupings = enforcer.get_roles_for_user(email)
+
+        if SENTINEL not in all_groupings:
             return Account.create_account(email)
 
-        enforcer = get_enforcer()
-        roles = enforcer.get_roles_for_user(email)
-        all_roles = AuthDB.get_all_roles()
-        authorizations = build_authorizations(enforcer, roles, all_roles)
-
-        db_account['roles'] = roles
-        db_account['authorizations'] = authorizations
-        return Account(config=db_account)
+        roles = [r for r in all_groupings if r != SENTINEL]
+        authorizations = build_authorizations(enforcer, roles)
+        return Account(config={'email': email, 'roles': roles, 'authorizations': authorizations})
 
     @staticmethod
     def find_by_role(role):
@@ -73,12 +67,13 @@ class Account:
     @staticmethod
     def create_account(email, roles=None):
         """
-        Creates a new account in the database.
+        Creates a new account, recording its existence in Casbin.
 
         :param email: The email address of the account.
         :param roles: Optional list of roles to assign immediately.
         """
-        AuthDB.create_account({'email': email})
+        enforcer = get_enforcer()
+        enforcer.add_role_for_user(email, SENTINEL)
         account = Account(config={
             'email': email,
             'roles': [],

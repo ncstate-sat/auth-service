@@ -4,7 +4,6 @@ import os
 from fastapi.testclient import TestClient
 from main import app
 from models.Token import Token
-from util.db import AuthDB
 from util import casbin_enforcer
 from util.casbin_enforcer import build_test_enforcer
 
@@ -22,8 +21,6 @@ ADMIN_ROLE = {
 MEMBER_ROLE = {
     'name': 'member',
     'authorizations': {
-        'can_do_x': True,
-        'can_do_y': True,
         '_read': [],
         '_write': []
     }
@@ -69,8 +66,6 @@ def test_get_accounts_with_role(monkeypatch):
     It should get all users with a role.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
@@ -82,8 +77,6 @@ def test_get_accounts_with_role(monkeypatch):
         'email': 'member@university.edu',
         'roles': ['member'],
         'authorizations': {
-            'can_do_x': True,
-            'can_do_y': True,
             '_read': [],
             '_write': []
         }
@@ -114,8 +107,6 @@ def test_get_account_with_role_unauthorized(monkeypatch):
     It should fail to get users with a certain role if the requesting account does not have authorization.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.get(
@@ -134,8 +125,6 @@ def test_add_role(monkeypatch):
     It should be able to add a role to an account.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -183,8 +172,6 @@ def test_add_role_unauthorized(monkeypatch):
     It should fail to add roles to an account if the requesting account does not have authorization.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(
@@ -207,8 +194,6 @@ def test_remove_role(monkeypatch):
     It should be able to remove multiple roles from an account.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -234,8 +219,6 @@ def test_remove_role_unauthorized(monkeypatch):
     It should fail to remove roles if the requesting account does not have permission.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(
@@ -258,8 +241,6 @@ def test_add_and_remove_roles(monkeypatch):
     It should be able to add and remove roles for an account.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -286,8 +267,6 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
     It should fail to add and remove roles when the requesting account lacks permission.
     """
     monkeypatch.setattr(casbin_enforcer, '_enforcer', build_test_enforcer(ALL_ROLES, ALL_USER_ROLES))
-    monkeypatch.setattr(AuthDB, 'get_account_by_email', lambda email: {'email': email})
-    monkeypatch.setattr(AuthDB, 'get_all_roles', lambda: ALL_ROLES)
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(

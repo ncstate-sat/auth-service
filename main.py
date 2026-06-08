@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from controllers.authentication import router as authentication_router
 from controllers.authorization import router as authorization_router
-from util.casbin_enforcer import get_enforcer, migrate_policies_from_mongodb
+from controllers.roles import router as roles_router
+from util.casbin_enforcer import get_enforcer
 load_dotenv()
 
 
@@ -38,9 +39,7 @@ Each auth JWT expires 15 minutes after it's generated. After expiring, the token
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # On startup, migrate existing MongoDB role/account data into Casbin if the
-    # casbin_rules collection is empty. This is a no-op after the first boot.
-    migrate_policies_from_mongodb(get_enforcer())
+    get_enforcer()
     yield
 
 
@@ -68,3 +67,4 @@ def welcome():
 
 app.include_router(authentication_router)
 app.include_router(authorization_router)
+app.include_router(roles_router)
