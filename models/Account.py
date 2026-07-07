@@ -1,39 +1,35 @@
 """A model to handle account CRUD."""
 
-from util.db import AuthDB
-
 
 class Account:
     """The Account model handles CRUD functions for accounts."""
-    email = None
-    roles = []
-    authorizations = {}
+    email = None        # The email address of the account holder.
+    roles = []          # The top-level roles assigned to the user.
+    permissions = []    # The flattened list of granular permissions derived from the roles.
 
     def __init__(self, config):
         if 'email' in config:
             self.email = config['email']
         if 'roles' in config:
             self.roles = list(set(config['roles']))
-        if 'authorizations' in config:
-            self.authorizations = config['authorizations']
+        if 'permissions' in config:
+            self.permissions = list(set(config['permissions']))
 
     def update(self):
         """Updates this instance in the database."""
-        return AuthDB.update_account(self.__dict__)
+        
 
     def add_role(self, role):
         """Adds a role to this user if it is not already added."""
-        if role not in self.roles:
-            self.roles.append(role)
+        
 
     def remove_role(self, role):
         """Removes a role from this user, if they have it."""
-        if role in self.roles:
-            self.roles.remove(role)
+        
 
     def delete(self):
         """Deletes this instance from the database."""
-        return AuthDB.delete_account(self.__dict__)
+        
 
     @staticmethod
     def find_by_email(email):
@@ -43,12 +39,7 @@ class Account:
         Parameters:
             email: The email address of the account.
         """
-        db_account = AuthDB.get_account_by_email(email)
-        if db_account is None:
-            new_account = Account.create_account(email, None)
-            return new_account
-        else:
-            return Account(config=db_account)
+        
 
     @staticmethod
     def find_by_role(role):
@@ -57,13 +48,7 @@ class Account:
 
         :param filter: The attribute that should be searched.
         """
-        db_accounts = AuthDB.get_accounts_by_role(role)
-
-        accounts = []
-        for account in db_accounts:
-            accounts.append(Account(config=account))
-
-        return accounts
+        
 
     @staticmethod
     def create_account(email, roles=None):
@@ -73,9 +58,4 @@ class Account:
         :param email: The email address of the account.
         :param authorizations: The authorization data of the account.
         """
-        if roles is None:
-            roles = []
-        account_data = {'email': email,
-                        'roles': roles}
-        AuthDB.create_account(account_data)
-        return Account(config=account_data)
+        

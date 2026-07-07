@@ -8,3 +8,5 @@ requests
 pymongo
 pytest
 httpx
+casbin
+casbin_pymongo_adapter

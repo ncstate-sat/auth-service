@@ -22,23 +22,15 @@ def get_accounts_with_role(response: Response,
     """Gets all accounts with specified roles.
 
     It may be necessary to query all accounts with a certain
-    authorization. This endpoint can query accounts and return that
+    permission. This endpoint can query accounts and return that
     list of accounts.
     """
 
-    # Get read permissions of the requesting account.
+    # Get the permissions of the requesting account.
     requesting_account = Token.decode_token(authorization.split(' ')[1])
     requesting_account = Account.find_by_email(requesting_account['email'])
-    read_permissions: dict = requesting_account.authorizations.get('_read', [])
-
-    # If requesting user has permission, return accounts data.
-    if role in read_permissions:
-        accounts = Account.find_by_role(role)
-    else:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return {
-            'error': f'This account is not authorized to read {role} authorizations.'
-        }
+    
+    accounts = Account.find_by_role(role) # TODO: We must first verify that the user is authorized to read this data.
 
     return {
         'accounts': accounts
@@ -51,18 +43,13 @@ def update_authorization(response: Response,
                          authorization: str = Header(default=None)):
     """Adds or removes roles granted to accounts."""
 
-    # Get write permissions of the requesting account.
-    requesting_account = Token.decode_token(authorization.split(' ')[1])
-    requesting_account = Account.find_by_email(requesting_account['email'])
-    write_permissions: dict = requesting_account.authorizations.get('_write', [])
+    # Get the permissions of the requesting account.
+    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
     account = Account.find_by_email(body.email)
 
-    # Verify that the requesting account has permission to assign this role.
-    can_assign_roles: bool = all(role in write_permissions for role in body.add_roles)
-    can_revoke_roles: bool = all(role in write_permissions for role in body.remove_roles)
-
-    if can_assign_roles and can_revoke_roles:
+    if True: # TODO: We must first verify that this user is authorized to make these changes.
         for role in body.remove_roles:
             account.remove_role(role)
         for role in body.add_roles:
@@ -77,8 +64,8 @@ def update_authorization(response: Response,
 
     account_response = account.__dict__.copy()
 
-    if account_response.get('authorizations', False):
-        account_response.pop('authorizations')
+    if account_response.get('permissions', False):
+        account_response.pop('permissions')
 
     return {
         'account': account_response
