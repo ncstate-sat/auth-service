@@ -1,5 +1,7 @@
 """A model to handle account CRUD."""
 
+from util.enforcer import enforcer
+
 
 class Account:
     """The Account model handles CRUD functions for accounts."""
@@ -15,21 +17,23 @@ class Account:
         if 'permissions' in config:
             self.permissions = list(set(config['permissions']))
 
-    def update(self):
-        """Updates this instance in the database."""
-        
-
     def add_role(self, role):
         """Adds a role to this user if it is not already added."""
-        
+        if role not in self.roles:
+            enforcer.add_grouping_policy(self.email, role)
+            self.roles.append(role)
+            self.permissions = Account._flatten_permissions(self.email)
 
     def remove_role(self, role):
         """Removes a role from this user, if they have it."""
-        
+        if role in self.roles:
+            enforcer.remove_grouping_policy(self.email, role)
+            self.roles.remove(role)
+            self.permissions = Account._flatten_permissions(self.email)
 
     def delete(self):
         """Deletes this instance from the database."""
-        
+        return enforcer.remove_filtered_grouping_policy(0, self.email)
 
     @staticmethod
     def find_by_email(email):
@@ -39,7 +43,11 @@ class Account:
         Parameters:
             email: The email address of the account.
         """
-        
+        return Account({
+            'email': email,
+            'roles': enforcer.get_roles_for_user(email),
+            'permissions': Account._flatten_permissions(email)
+        })
 
     @staticmethod
     def find_by_role(role):
@@ -48,7 +56,7 @@ class Account:
 
         :param filter: The attribute that should be searched.
         """
-        
+        return [Account.find_by_email(email) for email in enforcer.get_users_for_role(role)]
 
     @staticmethod
     def create_account(email, roles=None):
@@ -56,6 +64,18 @@ class Account:
         Creates a new account in the database.
 
         :param email: The email address of the account.
-        :param authorizations: The authorization data of the account.
+        :param roles: The roles to grant the account.
         """
-        
+        account = Account({'email': email, 'roles': []})
+        for role in (roles or []):
+            account.add_role(role)
+
+        return account
+
+    @staticmethod
+    def _flatten_permissions(email):
+        """Flattens this user's implicit (role, obj, act) permissions into 'obj:act' strings."""
+        return list({
+            f'{obj}:{act}'
+            for _, obj, act in enforcer.get_implicit_permissions_for_user(email)
+        })

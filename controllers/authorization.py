@@ -4,6 +4,7 @@ from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel
 from models.Token import Token
 from models.Account import Account
+from util.enforcer import enforcer
 
 router = APIRouter()
 
@@ -29,8 +30,14 @@ def get_accounts_with_role(response: Response,
     # Get the permissions of the requesting account.
     requesting_account = Token.decode_token(authorization.split(' ')[1])
     requesting_account = Account.find_by_email(requesting_account['email'])
-    
-    accounts = Account.find_by_role(role) # TODO: We must first verify that the user is authorized to read this data.
+
+    if not enforcer.enforce(requesting_account.email, role, 'read'):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {
+            'error': f'This account is not authorized to read {role} authorizations.'
+        }
+
+    accounts = Account.find_by_role(role)
 
     return {
         'accounts': accounts
@@ -49,7 +56,10 @@ def update_authorization(response: Response,
 
     account = Account.find_by_email(body.email)
 
-    if True: # TODO: We must first verify that this user is authorized to make these changes.
+    changed_roles = body.add_roles + body.remove_roles
+    is_authorized = all(enforcer.enforce(requesting_account.email, role, 'write') for role in changed_roles)
+
+    if is_authorized:
         for role in body.remove_roles:
             account.remove_role(role)
         for role in body.add_roles:
@@ -63,9 +73,7 @@ def update_authorization(response: Response,
         }
 
     account_response = account.__dict__.copy()
-
-    if account_response.get('permissions', False):
-        account_response.pop('permissions')
+    account_response.pop('permissions', None)
 
     return {
         'account': account_response

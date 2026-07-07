@@ -30,7 +30,7 @@ def test_decode_google_token(monkeypatch):
         return {'email': EMAIL}
 
     def mock_find_by_email(*args, **kwargs):
-        return Account({'email': EMAIL, 'authorizations': {}})
+        return Account({'email': EMAIL, 'roles': [], 'permissions': []})
 
     monkeypatch.setattr(Token, 'decode_google_token', mock_decode_google_token)
     monkeypatch.setattr(Account, 'find_by_email', mock_find_by_email)
@@ -62,7 +62,7 @@ def test_decode_token():
 
 def test_refresh_token(monkeypatch):
     def mock_find_by_email(*args, **kwargs):
-        return Account({'email': EMAIL, 'authorizations': {}})
+        return Account({'email': EMAIL, 'roles': [], 'permissions': []})
 
     monkeypatch.setattr(Account, 'find_by_email', mock_find_by_email)
 
