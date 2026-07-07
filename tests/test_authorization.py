@@ -4,6 +4,7 @@ import os
 from fastapi.testclient import TestClient
 from main import app
 from models.Token import Token
+import util.enforcer
 from util.enforcer import enforcer
 
 client = TestClient(app)
@@ -325,4 +326,135 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
     assert response.status_code == 400
     assert response.json() == {
         'error': 'This account is not authorized to write to this user\'s authorization(s).'
+    }
+
+
+def test_get_role_permissions(monkeypatch):
+    """
+    It should get the permissions granted to a role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_filtered_policy', lambda _index, role: [[role, 'can_do_x', 'read']])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-permissions?role=member',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'permissions': [{'obj': 'can_do_x', 'act': 'read'}]
+    }
+
+
+def test_get_role_permissions_unauthorized(monkeypatch):
+    """
+    It should fail to get a role's permissions without read access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        '/role-permissions?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to read admin authorizations.'
+    }
+
+
+def test_update_role_permissions(monkeypatch):
+    """
+    It should be able to add and remove permissions granted to a role.
+    """
+    role_policies = [['member', 'can_do_x', 'read']]
+
+    def mock_add_policy(role, obj, act):
+        role_policies.append([role, obj, act])
+
+    def mock_remove_policy(role, obj, act):
+        role_policies.remove([role, obj, act])
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin', 'member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_policy', mock_add_policy)
+    monkeypatch.setattr(enforcer, 'remove_policy', mock_remove_policy)
+    monkeypatch.setattr(enforcer, 'get_filtered_policy',
+                        lambda _index, role: [p for p in role_policies if p[0] == role])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'member',
+            'add_permissions': [{'obj': 'can_do_y', 'act': 'write'}],
+            'remove_permissions': [{'obj': 'can_do_x', 'act': 'read'}]
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'permissions': [{'obj': 'can_do_y', 'act': 'write'}]
+    }
+
+
+def test_update_role_permissions_unauthorized(monkeypatch):
+    """
+    It should fail to update a role's permissions without write access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_permissions': [{'obj': 'root', 'act': 'write'}]
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to write to the admin role\'s permissions.'
+    }
+
+
+def test_root_admin_email_bypasses_authorization(monkeypatch):
+    """
+    ROOT_ADMIN_EMAIL should be authorized even when casbin would otherwise deny,
+    so the first role/permissions can be bootstrapped on a fresh system.
+    """
+    root_email = 'root@university.edu'
+    monkeypatch.setattr(util.enforcer, 'ROOT_ADMIN_EMAIL', root_email)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_policy', lambda *_: None)
+    monkeypatch.setattr(enforcer, 'get_filtered_policy', lambda *_: [])
+
+    token = Token.generate_token({'email': root_email, 'roles': [], 'permissions': []})
+    response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_permissions': [{'obj': 'admin', 'act': 'write'}]
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'permissions': []
     }
