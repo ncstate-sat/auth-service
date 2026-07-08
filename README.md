@@ -73,7 +73,7 @@ Then run `pytest`.
 
 You can see a demo of this service and how it works by trying it out in a webpage. A demo website is provided in the `demo-website` folder. The contents of the folder must be served over port 3000 (or whichever port it configured in Google Cloud Platform) to work properly with Google Identity Services.
 
-**Before running the website, set the Client ID on line 148 in `./demo-website/script.js`. It's the same as the `GOOGLE_CLIENT_ID` environment variable in this document.**
+**Before running the website, set the Client ID on line 6 in `./demo-website/main.js`. It's the same as the `GOOGLE_CLIENT_ID` environment variable in this document.**
 
 You can serve the folder easily with the `http-server` package.
 
