@@ -34,27 +34,27 @@ Roles and permissions are managed with [casbin](https://casbin.org/), and every 
 Install dependencies.
 
 ```
-pip install -r requirements.txt
+make setup
 ```
 
 Make sure the required environment variables are set, then run the project.
 
 ```
-uvicorn main:app --reload
+make run-dev
 ```
 
-## Running in a Docker Container
+## Running the service + database in Docker
 
-Build the image.
-
-```
-docker build -t auth-service .
-```
-
-Run the container, ensuring it's set up with the required environment variables.
+Use Docker Compose to start both a database and a service container. It will expect any environment variables in a .env file.
 
 ```
-docker run -p 8000:8000 --env-file .env auth-service
+docker compose up -d --build
+```
+
+To stop it from running:
+
+```
+docker compose down
 ```
 
 ## Running the Tests

@@ -4,10 +4,8 @@ The starting point for the auth service.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 from controllers.authentication import router as authentication_router
 from controllers.authorization import router as authorization_router
-load_dotenv()
 
 
 DESCRIPTION = """
@@ -34,7 +32,7 @@ Each auth JWT expires 15 minutes after it's generated. After expiring, the token
 app = FastAPI(
     title='Auth Service',
     description=DESCRIPTION,
-    version="1.0.1"
+    version="2.0.0"
 )
 
 app.add_middleware(
