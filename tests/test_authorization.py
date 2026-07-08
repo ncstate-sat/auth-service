@@ -45,6 +45,108 @@ def mock_enforce_by_role(allowed_roles):
     return _enforce
 
 
+def test_get_roles(monkeypatch):
+    """
+    It should list all known role names, deduplicated and excluding emails.
+    """
+    monkeypatch.setattr(enforcer, 'get_policy', lambda: [
+        ['admin', 'member', 'write'],
+        ['member', 'member', 'read'],
+    ])
+    monkeypatch.setattr(enforcer, 'get_all_roles', lambda: ['member', 'liaison', MEMBER_ACCOUNT['email']])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/roles',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'roles': ['admin', 'liaison', 'member']
+    }
+
+    expired_response = client.get(
+        '/roles',
+        headers={'Authorization': f'Bearer {EXPIRED_JWT}'}
+    )
+    assert expired_response.status_code == 401
+    assert 'roles' not in expired_response.json()
+
+
+def test_get_account_self(monkeypatch):
+    """
+    It should let an account read its own email, roles, and permissions
+    without any authorization check.
+    """
+    def mock_get_implicit_permissions_for_user(email):
+        return [] if email != ADMIN_ACCOUNT['email'] else [
+            ['admin', obj, act] for perm in ADMIN_ACCOUNT['permissions']
+            for obj, act in [perm.split(':')]
+        ]
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', mock_get_implicit_permissions_for_user)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        f'/account?email={ADMIN_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['email'] == ADMIN_ACCOUNT['email']
+    assert body['roles'] == ADMIN_ACCOUNT['roles']
+    assert set(body['permissions']) == set(ADMIN_ACCOUNT['permissions'])
+
+
+def test_get_account(monkeypatch):
+    """
+    It should get another account's email, roles, and permissions if the
+    requester can read all of that account's roles.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda email: ADMIN_ACCOUNT['roles'] if email == ADMIN_ACCOUNT['email'] else MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        f'/account?email={MEMBER_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'email': MEMBER_ACCOUNT['email'],
+        'roles': MEMBER_ACCOUNT['roles'],
+        'permissions': []
+    }
+
+
+def test_get_account_unauthorized(monkeypatch):
+    """
+    It should fail to get another account's info without read access to all of its roles.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda email: MEMBER_ACCOUNT['roles'] if email == MEMBER_ACCOUNT['email'] else ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        f'/account?email={ADMIN_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': f'This account is not authorized to read {ADMIN_ACCOUNT["email"]}\'s authorization(s).'
+    }
+
+
 def test_get_accounts_with_role(monkeypatch):
     """
     It should get all users with a role.

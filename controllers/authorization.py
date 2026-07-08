@@ -43,6 +43,55 @@ class UpdateRoleInheritanceRequestBody(BaseModel):
     remove_inherited_roles: list[str] = []
 
 
+@router.get('/roles', tags=['Authorization'])
+def get_roles(authorization: str = Header(default=None)):
+    """Gets the names of all known roles.
+
+    A role is "known" once it has at least one permission or is inherited
+    by another role. This only exposes role names, not their permissions,
+    which stay gated per-role by /role-permissions.
+    """
+
+    # Any authenticated account may list role names.
+    Token.decode_token(authorization.split(' ')[1])
+
+    role_names = {sub for sub, _, _ in enforcer.get_policy()}
+    role_names.update(enforcer.get_all_roles())
+
+    return {
+        'roles': sorted(name for name in role_names if not EMAIL_PATTERN.match(name))
+    }
+
+
+@router.get('/account', tags=['Authorization'])
+def get_account(response: Response,
+                email: str,
+                authorization: str = Header(default=None)):
+    """Gets an account's email, roles, and permissions."""
+
+    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account = Account.find_by_email(requesting_account_payload['email'])
+
+    account = Account.find_by_email(email)
+
+    is_permitted = (
+        requesting_account.email == account.email
+        or all(is_authorized(requesting_account.email, role, 'read') for role in account.roles)
+    )
+
+    if not is_permitted:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {
+            'error': f'This account is not authorized to read {email}\'s authorization(s).'
+        }
+
+    return {
+        'email': account.email,
+        'roles': account.roles,
+        'permissions': account.permissions
+    }
+
+
 @router.get('/role-accounts', tags=['Authorization'])
 def get_accounts_with_role(response: Response,
                                     role: str,
