@@ -1,16 +1,12 @@
 """Controller functions and routes for authorization CRUD."""
 
-import re
-
 from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, field_validator
 from models.Token import Token
-from models.Account import Account
+from models.Account import Account, EMAIL_PATTERN
 from util.enforcer import enforcer, is_authorized
 
 router = APIRouter()
-
-EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
 class UpdateAuthorizationRequestBody(BaseModel):
@@ -38,6 +34,13 @@ class UpdateRolePermissionsRequestBody(BaseModel):
     role: str
     add_permissions: list[PermissionPair] = []
     remove_permissions: list[PermissionPair] = []
+
+
+class UpdateRoleInheritanceRequestBody(BaseModel):
+    """Request body model."""
+    role: str
+    add_inherited_roles: list[str] = []
+    remove_inherited_roles: list[str] = []
 
 
 @router.get('/role-accounts', tags=['Authorization'])
@@ -148,4 +151,65 @@ def update_role_permissions(response: Response,
 
     return {
         'permissions': permissions
+    }
+
+
+@router.get('/role-inheritance', tags=['Authorization'])
+def get_role_inheritance(response: Response,
+                         role: str,
+                         authorization: str = Header(default=None)):
+    """Gets the roles a role inherits from, and its resulting effective permissions."""
+
+    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account = Account.find_by_email(requesting_account_payload['email'])
+
+    if not is_authorized(requesting_account.email, role, 'read'):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {
+            'error': f'This account is not authorized to read {role} authorizations.'
+        }
+
+    inherited_roles = enforcer.get_roles_for_user(role)
+    effective_permissions = [
+        {'obj': obj, 'act': act}
+        for obj, act in {(obj, act) for _, obj, act in enforcer.get_implicit_permissions_for_user(role)}
+    ]
+
+    return {
+        'inherited_roles': inherited_roles,
+        'effective_permissions': effective_permissions
+    }
+
+
+@router.put('/update-role-inheritance', tags=['Authorization'])
+def update_role_inheritance(response: Response,
+                            body: UpdateRoleInheritanceRequestBody,
+                            authorization: str = Header(default=None)):
+    """Adds or removes the roles a role inherits from."""
+
+    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account = Account.find_by_email(requesting_account_payload['email'])
+
+    if not is_authorized(requesting_account.email, body.role, 'write'):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {
+            'error': f'This account is not authorized to write to the {body.role} role\'s inheritance.'
+        }
+
+    for inherited_role in body.add_inherited_roles:
+        if inherited_role == body.role or body.role in enforcer.get_implicit_roles_for_user(inherited_role):
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return {
+                'error': f'Cannot add {inherited_role} as a inherited role of {body.role}: this would create a cycle.'
+            }
+
+    for inherited_role in body.remove_inherited_roles:
+        enforcer.remove_grouping_policy(body.role, inherited_role)
+    for inherited_role in body.add_inherited_roles:
+        enforcer.add_grouping_policy(body.role, inherited_role)
+
+    inherited_roles = enforcer.get_roles_for_user(body.role)
+
+    return {
+        'inherited_roles': inherited_roles
     }

@@ -96,6 +96,35 @@ def test_get_accounts_with_role(monkeypatch):
     assert 'accounts' not in invalid_response.json()
 
 
+def test_get_accounts_with_role_excludes_inheriting_roles(monkeypatch):
+    """
+    It should not include other role names in the results, even if those roles
+    have a direct grouping-policy edge into the queried role (i.e. inherit from it).
+    """
+    def mock_get_users_for_role(role):
+        return ['admin', MEMBER_ACCOUNT['email']] if role == 'liaison' else []
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['liaison']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_users_for_role', mock_get_users_for_role)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-accounts?role=liaison',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'accounts': [{
+            'email': MEMBER_ACCOUNT['email'],
+            'roles': MEMBER_ACCOUNT['roles'],
+            'permissions': []
+        }]
+    }
+
+
 def test_get_account_with_role_unauthorized(monkeypatch):
     """
     It should fail to get users with a certain role if the requesting account does not have authorization.
@@ -429,6 +458,220 @@ def test_update_role_permissions_unauthorized(monkeypatch):
     assert response.json() == {
         'error': 'This account is not authorized to write to the admin role\'s permissions.'
     }
+
+
+def test_get_role_inheritance(monkeypatch):
+    """
+    It should get a role's inherited roles and effective (inherited) permissions.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else ['liaison'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user',
+                        lambda name: [] if name != 'admin' else [['admin', 'clearance', 'read']])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-inheritance?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': ['liaison'],
+        'effective_permissions': [{'obj': 'clearance', 'act': 'read'}]
+    }
+
+
+def test_get_role_inheritance_deduplicates_permissions(monkeypatch):
+    """
+    It should not list the same (obj, act) permission twice, even if it is
+    granted by more than one inherited role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else ['liaison', 'student'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user',
+                        lambda name: [] if name != 'admin' else [
+                            ['liaison', 'clearance', 'read'],
+                            ['student', 'clearance', 'read']
+                        ])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-inheritance?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': ['liaison', 'student'],
+        'effective_permissions': [{'obj': 'clearance', 'act': 'read'}]
+    }
+
+
+def test_get_role_inheritance_unauthorized(monkeypatch):
+    """
+    It should fail to get a role's inheritance without read access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        '/role-inheritance?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to read admin authorizations.'
+    }
+
+
+def test_update_role_inheritance_add(monkeypatch):
+    """
+    It should be able to add inherited roles to a role.
+    """
+    inherited_roles = []
+
+    def mock_add_grouping_policy(_role, inherited_role):
+        inherited_roles.append(inherited_role)
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else inherited_roles)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda _name: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', mock_add_grouping_policy)
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', lambda *_: None)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['liaison', 'student']
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': ['liaison', 'student']
+    }
+
+
+def test_update_role_inheritance_remove(monkeypatch):
+    """
+    It should be able to remove inherited roles from a role.
+    """
+    inherited_roles = ['liaison']
+
+    def mock_remove_grouping_policy(_role, inherited_role):
+        inherited_roles.remove(inherited_role)
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else inherited_roles)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda _name: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *_: None)
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', mock_remove_grouping_policy)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'remove_inherited_roles': ['liaison']
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': []
+    }
+
+
+def test_update_role_inheritance_unauthorized(monkeypatch):
+    """
+    It should fail to update a role's inheritance without write access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['liaison']
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to write to the admin role\'s inheritance.'
+    }
+
+
+def test_update_role_inheritance_rejects_self_cycle(monkeypatch):
+    """
+    It should reject a role being added as its own inherited role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda _name: [])
+    add_grouping_policy_calls = []
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *args: add_grouping_policy_calls.append(args))
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['admin']
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'Cannot add admin as a inherited role of admin: this would create a cycle.'
+    }
+    assert add_grouping_policy_calls == []
+
+
+def test_update_role_inheritance_rejects_transitive_cycle(monkeypatch):
+    """
+    It should reject adding a inherited role that already (transitively) inherits this role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda name: ['admin'] if name == 'liaison' else [])
+    add_grouping_policy_calls = []
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *args: add_grouping_policy_calls.append(args))
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['liaison']
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'Cannot add liaison as a inherited role of admin: this would create a cycle.'
+    }
+    assert add_grouping_policy_calls == []
 
 
 def test_root_admin_email_bypasses_authorization(monkeypatch):

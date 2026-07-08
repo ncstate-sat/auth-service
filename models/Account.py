@@ -1,6 +1,10 @@
 """A model to handle account CRUD."""
 
+import re
+
 from util.enforcer import enforcer
+
+EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
 class Account:
@@ -56,7 +60,14 @@ class Account:
 
         :param filter: The attribute that should be searched.
         """
-        return [Account.find_by_email(email) for email in enforcer.get_users_for_role(role)]
+        # get_users_for_role returns every node with a direct grouping-policy edge into
+        # this role, which includes other roles that inherit from it (not just accounts),
+        # since accounts and roles share the same casbin grouping relation.
+        return [
+            Account.find_by_email(email)
+            for email in enforcer.get_users_for_role(role)
+            if EMAIL_PATTERN.match(email)
+        ]
 
     @staticmethod
     def create_account(email, roles=None):
