@@ -4,12 +4,12 @@ This service handles all authentication and authorization needs for applications
 
 ## Environment Variables
 
-| Name (Required \*) | Description                                                                                                                                            | Example                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| GOOGLE_CLIENT_ID\* | This ID is required to decode Google Auth tokens, and it can be found in the Google Cloud Console.                                                     | token.apps.googleusercontent.com                  |
-| JWT_SECRET\*       | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT. | khMSpZkNsjwr                                      |
-| MONGODB_URL\*      | The connection string to the MongoDB instance.                                                                                                         | mongodb://username:mypassword@ehps.university.edu |
-| ROOT_ADMIN_EMAIL   | The email address of a standing "break glass" identity that bypasses all authorization checks. Used to bootstrap the first role/permissions on a fresh system, and as a permanent recovery path if admin roles ever get misconfigured. Treat it like a secret; leave it unset once it's no longer needed. | you@university.edu |
+| Name (Required \*) | Description                                                                                                                                                                                                                                                                                               | Example                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| GOOGLE_CLIENT_ID\* | This ID is required to decode Google Auth tokens, and it can be found in the Google Cloud Console.                                                                                                                                                                                                        | token.apps.googleusercontent.com                  |
+| JWT_SECRET\*       | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                                                                                                                    | khMSpZkNsjwr                                      |
+| MONGODB_URL\*      | The connection string to the MongoDB instance.                                                                                                                                                                                                                                                            | mongodb://username:mypassword@ehps.university.edu |
+| ROOT_ADMIN_EMAIL   | The email address of a standing "break glass" identity that bypasses all authorization checks. Used to bootstrap the first role/permissions on a fresh system, and as a permanent recovery path if admin roles ever get misconfigured. Treat it like a secret; leave it unset once it's no longer needed. | you@university.edu                                |
 
 ## Minimum Database Requirements
 
@@ -25,7 +25,7 @@ Roles and permissions are managed with [casbin](https://casbin.org/), and every 
 
 1. Set `ROOT_ADMIN_EMAIL` to your own email address in the environment.
 2. Sign in as that email through the normal authentication flow (`/google-sign-in`).
-3. Using the token from step 2, call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `write` access to itself and to any other roles it should manage.
+3. Using the auth token (from step 2 in the demo website), call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `write` access to itself and to any other roles it should manage.
 4. Call `PUT /update-account-roles` to grant yourself (or other accounts) that role.
 5. From here on, accounts with that role can manage roles/permissions on their own — `ROOT_ADMIN_EMAIL` can be left set as a permanent recovery path or unset once you're confident real admin accounts are in place. While it's set, it's a standing bypass of all authorization checks, so treat it like a secret.
 
@@ -71,9 +71,9 @@ Then run `pytest`.
 
 ## Demo
 
-You can see a demonstration of this service by trying it out in a webpage. A demo website is provided in the `demo-website` folder. The contents of the folder must be served over port 3000 (or whichever port it configured in Google Cloud Platform) to work properly with Google Identity Services.
+You can see a demo of this service and how it works by trying it out in a webpage. A demo website is provided in the `demo-website` folder. The contents of the folder must be served over port 3000 (or whichever port it configured in Google Cloud Platform) to work properly with Google Identity Services.
 
-**Before running the website, set the Client ID on line 123 in `index.html`. It's the same as the `GOOGLE_CLIENT_ID` environment variable in this document.**
+**Before running the website, set the Client ID on line 148 in `./demo-website/script.js`. It's the same as the `GOOGLE_CLIENT_ID` environment variable in this document.**
 
 You can serve the folder easily with the `http-server` package.
 
