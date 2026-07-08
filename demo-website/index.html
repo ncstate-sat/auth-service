@@ -1,153 +1,635 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auth Service Demo</title>
-    <link rel="stylesheet" href="styles.css">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auth Service — Demo Bench</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-</head>
+  </head>
 
-<body>
-    <div id="status-announcer" class="visually-hidden" role="status" aria-live="polite"></div>
+  <body>
+    <div
+      id="status-announcer"
+      class="visually-hidden"
+      role="status"
+      aria-live="polite"
+    ></div>
+
+    <header class="masthead">
+      <div class="masthead__title">
+        <p class="eyebrow">Auth Service</p>
+        <h1>Demo Bench</h1>
+        <p class="masthead__lede">
+          A workbench for developers on this repo: walk the login handshake,
+          then try out the API — roles, permissions, inheritance — and watch
+          every request land on the wire below.
+        </p>
+      </div>
+
+      <div class="session" aria-label="Session">
+        <div class="session__signed-out" id="session-signed-out">
+          <p class="session__hint">Not signed in. Start the handshake below.</p>
+        </div>
+
+        <div class="session__signed-in" id="session-signed-in" hidden>
+          <div class="session__identity">
+            <span class="session__email" id="session-email"></span>
+            <span class="chip-list" id="session-roles"></span>
+          </div>
+          <p class="session__countdown">
+            <span id="session-countdown-label">Auth token expires in</span>
+            <span
+              class="session__countdown-value"
+              id="session-countdown-value"
+            ></span>
+          </p>
+          <div class="session__actions">
+            <button type="button" class="btn btn--primary" id="session-refresh">
+              Refresh token
+            </button>
+            <button type="button" class="btn btn--ghost" id="session-sign-out">
+              Sign out
+            </button>
+          </div>
+          <p class="inline-status" id="session-status" data-tone="muted"></p>
+          <details class="session__tokens">
+            <summary>Session tokens</summary>
+            <p class="hint">
+              Tokens live in page memory only — reloading the page signs you
+              out.
+            </p>
+            <div class="token-view__row">
+              <span class="token-view__label">Auth token</span>
+              <button
+                type="button"
+                class="copy-btn"
+                data-copy-target="session-token-raw"
+                aria-label="Copy auth token"
+              >
+                Copy
+              </button>
+            </div>
+            <pre class="code-block" id="session-token-raw"></pre>
+            <p class="token-view__sublabel">Decoded payload</p>
+            <pre class="code-block" id="session-token-payload"></pre>
+            <div class="token-view__row">
+              <span class="token-view__label">Refresh token</span>
+              <button
+                type="button"
+                class="copy-btn"
+                data-copy-target="session-refresh-raw"
+                aria-label="Copy refresh token"
+              >
+                Copy
+              </button>
+            </div>
+            <pre class="code-block" id="session-refresh-raw"></pre>
+            <p class="token-view__sublabel">Decoded payload</p>
+            <pre class="code-block" id="session-refresh-payload"></pre>
+          </details>
+        </div>
+      </div>
+    </header>
 
     <main>
-        <header class="page-header">
-            <h1>Auth Service Demo</h1>
-            <p>
-                This page demonstrates the end-to-end login flow: a Google credential is exchanged for an
-                auth token, and that token is used to fetch an authorized payload from another service.
-                Sign in below to watch each step complete.
-            </p>
+      <!-- ──────────────────────────── Handshake ──────────────────────────── -->
+      <section class="panel panel--authn" aria-labelledby="handshake-title">
+        <header class="panel__header">
+          <p class="eyebrow eyebrow--accent">authentication.py</p>
+          <h2 id="handshake-title">Handshake</h2>
+          <p class="panel__lede" style="max-width: 100%">
+            Two exchanges turn a Google identity into a usable auth token:
+            Google issues a signed credential, and then
+            <code>/google-sign-in</code> trades it for this service's token
+            pair. You can use <code>/login</code> to shows the payload of that
+            token.
+          </p>
         </header>
 
-        <div id="buttonDiv" class="button-wrapper"></div>
+        <ol class="rail">
+          <li class="station station--pending" id="station-1">
+            <span
+              class="status-badge status-badge--step status-badge--pending"
+              data-status-for="1"
+              data-step="1"
+              >Pending</span
+            >
+            <h3 class="station__title">Google credential</h3>
+            <p class="station__endpoint"><code>accounts.google.com</code></p>
+            <p class="station__description">
+              Signing in opens a Google window. On success, Google returns a
+              signed ID token (JWT) with your email address encoded inside.
+            </p>
+            <div class="station__signin" id="google-button"></div>
+            <p class="inline-error" id="station-error-1" hidden></p>
+            <div class="artifact">
+              <div class="artifact__row">
+                <span class="artifact__label">Google credential</span>
+                <button
+                  type="button"
+                  class="copy-btn"
+                  data-copy-target="raw-credential"
+                  aria-label="Copy Google credential"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre class="code-block" id="raw-credential"></pre>
+              <details class="decoded" id="details-credential" hidden>
+                <summary>Decoded JWT</summary>
+                <p class="decoded__heading">Header</p>
+                <pre class="code-block" id="decoded-credential-header"></pre>
+                <p class="decoded__heading">Payload</p>
+                <pre class="code-block" id="decoded-credential-payload"></pre>
+              </details>
+            </div>
+          </li>
 
-        <ol class="stepper">
-            <li class="stepper__step" id="step-1" data-step="1">
-                <div class="stepper__indicator" aria-hidden="true">
-                    <span class="stepper__circle">1</span>
-                    <span class="stepper__line"></span>
-                </div>
-                <div class="stepper__content">
-                    <div class="stepper__header">
-                        <h2 class="stepper__title">Sign in with Google</h2>
-                        <span class="status-badge status-badge--pending" data-status-for="1">Pending</span>
-                    </div>
-                    <p class="stepper__description">
-                        Clicking the button opens a Google sign-in window. On success, Google sends back a
-                        credential containing a signed ID token with the user's email address encoded inside.
-                    </p>
-                    <p class="error-message" id="error-1" hidden></p>
-                    <div class="result">
-                        <div class="result__row">
-                            <span class="result__label">Google Credential</span>
-                            <button type="button" class="copy-btn" data-copy-target="raw-credential"
-                                aria-label="Copy Google credential">Copy</button>
-                        </div>
-                        <pre class="code-block" id="raw-credential"></pre>
-                        <details class="decoded" id="details-credential">
-                            <summary>Decoded JWT</summary>
-                            <div class="decoded__section">
-                                <h3 class="decoded__heading">Header</h3>
-                                <pre class="code-block" id="decoded-credential-header"></pre>
-                            </div>
-                            <div class="decoded__section">
-                                <h3 class="decoded__heading">Payload</h3>
-                                <pre class="code-block" id="decoded-credential-payload"></pre>
-                            </div>
-                        </details>
-                    </div>
-                </div>
-            </li>
+          <li class="station station--pending" id="station-2">
+            <span
+              class="status-badge status-badge--step status-badge--pending"
+              data-status-for="2"
+              data-step="2"
+              >Pending</span
+            >
+            <h3 class="station__title">Token exchange</h3>
+            <p class="station__endpoint"><code>POST /google-sign-in</code></p>
+            <p class="station__description">
+              The service decodes the credential to get your email, looks up
+              your roles and flattened permissions through casbin, and signs
+              them into a 15-minute auth token plus a 2-day refresh token.
+            </p>
+            <p class="inline-error" id="station-error-2" hidden></p>
+            <div class="artifact">
+              <div class="artifact__row">
+                <span class="artifact__label">Auth token</span>
+                <button
+                  type="button"
+                  class="copy-btn"
+                  data-copy-target="raw-token"
+                  aria-label="Copy auth token"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre class="code-block" id="raw-token"></pre>
+              <details class="decoded" id="details-token" hidden>
+                <summary>Decoded JWT</summary>
+                <p class="decoded__heading">Header</p>
+                <pre class="code-block" id="decoded-token-header"></pre>
+                <p class="decoded__heading">Payload</p>
+                <pre class="code-block" id="decoded-token-payload"></pre>
+              </details>
+              <div class="artifact__row artifact__row--spaced">
+                <span class="artifact__label">Refresh token</span>
+                <button
+                  type="button"
+                  class="copy-btn"
+                  data-copy-target="raw-refresh-token"
+                  aria-label="Copy refresh token"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre class="code-block" id="raw-refresh-token"></pre>
+              <details class="decoded" id="details-refresh-token" hidden>
+                <summary>Decoded JWT</summary>
+                <p class="decoded__heading">Header</p>
+                <pre class="code-block" id="decoded-refresh-token-header"></pre>
+                <p class="decoded__heading">Payload</p>
+                <pre
+                  class="code-block"
+                  id="decoded-refresh-token-payload"
+                ></pre>
+              </details>
+            </div>
+          </li>
 
-            <li class="stepper__step" id="step-2" data-step="2">
-                <div class="stepper__indicator" aria-hidden="true">
-                    <span class="stepper__circle">2</span>
-                    <span class="stepper__line"></span>
-                </div>
-                <div class="stepper__content">
-                    <div class="stepper__header">
-                        <h2 class="stepper__title">Token exchange <code>POST /google-sign-in</code></h2>
-                        <span class="status-badge status-badge--pending" data-status-for="2">Pending</span>
-                    </div>
-                    <p class="stepper__description">
-                        The Google credential is sent to the auth service, where it's decoded to derive the
-                        user's email address. The service looks up authorization data for that email and
-                        encodes it into a new auth token, along with a refresh token.
-                    </p>
-                    <p class="error-message" id="error-2" hidden></p>
-                    <div class="result">
-                        <div class="result__row">
-                            <span class="result__label">Auth Token</span>
-                            <button type="button" class="copy-btn" data-copy-target="raw-token"
-                                aria-label="Copy auth token">Copy</button>
-                        </div>
-                        <pre class="code-block" id="raw-token"></pre>
-                        <details class="decoded" id="details-token">
-                            <summary>Decoded JWT</summary>
-                            <div class="decoded__section">
-                                <h3 class="decoded__heading">Header</h3>
-                                <pre class="code-block" id="decoded-token-header"></pre>
-                            </div>
-                            <div class="decoded__section">
-                                <h3 class="decoded__heading">Payload</h3>
-                                <pre class="code-block" id="decoded-token-payload"></pre>
-                            </div>
-                        </details>
-
-                        <div class="result__row result__row--spaced">
-                            <span class="result__label">Refresh Token</span>
-                            <button type="button" class="copy-btn" data-copy-target="raw-refresh-token"
-                                aria-label="Copy refresh token">Copy</button>
-                        </div>
-                        <pre class="code-block" id="raw-refresh-token"></pre>
-                        <details class="decoded" id="details-refresh-token">
-                            <summary>Decoded JWT</summary>
-                            <div class="decoded__section">
-                                <h3 class="decoded__heading">Header</h3>
-                                <pre class="code-block" id="decoded-refresh-token-header"></pre>
-                            </div>
-                            <div class="decoded__section">
-                                <h3 class="decoded__heading">Payload</h3>
-                                <pre class="code-block" id="decoded-refresh-token-payload"></pre>
-                            </div>
-                        </details>
-                    </div>
-                </div>
-            </li>
-
-            <li class="stepper__step" id="step-3" data-step="3">
-                <div class="stepper__indicator" aria-hidden="true">
-                    <span class="stepper__circle">3</span>
-                </div>
-                <div class="stepper__content">
-                    <div class="stepper__header">
-                        <h2 class="stepper__title">Login payload <code>POST /login</code></h2>
-                        <span class="status-badge status-badge--pending" data-status-for="3">Pending</span>
-                    </div>
-                    <p class="stepper__description">
-                        The auth token is sent to another backend service as a bearer token. That service
-                        trusts the token and returns the authorized payload for this request &mdash; the same
-                        way any downstream service would use it.
-                    </p>
-                    <p class="error-message" id="error-3" hidden></p>
-                    <div class="result">
-                        <div class="result__row">
-                            <span class="result__label">Response Payload</span>
-                            <button type="button" class="copy-btn" data-copy-target="raw-payload"
-                                aria-label="Copy response payload">Copy</button>
-                        </div>
-                        <pre class="code-block" id="raw-payload"></pre>
-                    </div>
-                </div>
-            </li>
+          <li class="station station--pending" id="station-3">
+            <span
+              class="status-badge status-badge--step status-badge--pending"
+              data-status-for="3"
+              data-step="3"
+              >Pending</span
+            >
+            <h3 class="station__title">Authorized payload</h3>
+            <p class="station__endpoint"><code>POST /login</code></p>
+            <p class="station__description">
+              The auth token is used as a bearer token for any service. The
+              service can decode the token and read the payload, verifying you
+              can use the requested resouces. You can use this endpoint to view
+              any token's payload.
+            </p>
+            <p class="inline-error" id="station-error-3" hidden></p>
+            <div class="artifact">
+              <div class="artifact__row">
+                <span class="artifact__label">Response payload</span>
+                <button
+                  type="button"
+                  class="copy-btn"
+                  data-copy-target="raw-payload"
+                  aria-label="Copy response payload"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre class="code-block" id="raw-payload"></pre>
+            </div>
+          </li>
         </ol>
+      </section>
+
+      <!-- ──────────────────────────── Workbench ──────────────────────────── -->
+      <div class="workbench workbench--locked" id="workbench">
+        <p class="workbench__lock" id="workbench-lock" role="note">
+          Sign in to use the workbench — it needs the auth token from the
+          handshake to call the authorization endpoints. Reads require
+          <code>read</code> permission on the role in question, writes require
+          <code>write</code>; denials come back as <code>400</code> and land on
+          the wire like everything else.
+        </p>
+
+        <div class="workbench__panels" id="workbench-panels" inert>
+          <section
+            class="panel panel--authz panel--roles"
+            aria-labelledby="roles-title"
+          >
+            <header class="panel__header">
+              <p class="eyebrow eyebrow--accent">authorization.py</p>
+              <h2 id="roles-title">Roles</h2>
+            </header>
+
+            <div class="panel__block">
+              <div class="block-head">
+                <h3>Known roles</h3>
+                <button type="button" class="btn btn--ghost" id="load-roles">
+                  Reload roles
+                </button>
+              </div>
+              <p class="hint">
+                <code>GET /roles</code> — a role is “known” once it holds at
+                least one permission or is inherited by another role.
+              </p>
+              <p class="inline-status" id="roles-status" data-tone="muted"></p>
+              <ul class="role-list" id="roles-list"></ul>
+            </div>
+
+            <div class="panel__block">
+              <h3>Create a role</h3>
+              <p class="hint">
+                There is no separate create endpoint — granting a first
+                permission via
+                <code>PUT /update-role-permissions</code> brings a role into
+                existence.
+              </p>
+              <form id="create-role-form">
+                <label class="field">
+                  <span class="field__label">Role name</span>
+                  <input
+                    type="text"
+                    id="create-role-name"
+                    name="role"
+                    required
+                    autocomplete="off"
+                    placeholder="editor"
+                  />
+                </label>
+                <fieldset class="perm-rows" id="create-role-perms">
+                  <legend>Permissions to grant</legend>
+                  <div class="perm-row">
+                    <label class="field field--grow">
+                      <span class="field__label">Object (resource)</span>
+                      <input
+                        type="text"
+                        name="obj"
+                        required
+                        autocomplete="off"
+                        placeholder="member"
+                      />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">Action</span>
+                      <input
+                        type="text"
+                        name="act"
+                        required
+                        autocomplete="off"
+                        placeholder="read"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      class="btn btn--ghost btn--small perm-row__remove"
+                      aria-label="Remove this permission row"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </fieldset>
+                <div class="form-actions">
+                  <button
+                    type="button"
+                    class="btn btn--ghost"
+                    id="create-role-add-row"
+                  >
+                    Add another permission
+                  </button>
+                  <button type="submit" class="btn btn--primary">
+                    Create role
+                  </button>
+                </div>
+              </form>
+              <p
+                class="inline-status"
+                id="create-role-status"
+                data-tone="muted"
+              ></p>
+            </div>
+          </section>
+
+          <section
+            class="panel panel--authz panel--role-detail"
+            aria-labelledby="role-detail-title"
+          >
+            <header class="panel__header">
+              <p class="eyebrow eyebrow--accent">authorization.py</p>
+              <h2 id="role-detail-title">Role detail</h2>
+              <p class="panel__lede">
+                Direct permissions are <code>p</code> tuples, inheritance edges
+                are <code>g</code> tuples — the same rows casbin stores.
+                Effective permissions are what it resolves after walking the
+                inheritance graph.
+              </p>
+            </header>
+
+            <form class="lookup" id="role-lookup-form">
+              <label class="field field--grow">
+                <span class="field__label">Role name</span>
+                <input
+                  type="text"
+                  id="role-lookup-input"
+                  list="known-roles"
+                  required
+                  autocomplete="off"
+                  placeholder="admin"
+                />
+              </label>
+              <button type="submit" class="btn btn--primary">Open role</button>
+            </form>
+
+            <p class="hint" id="role-detail-empty">
+              Pick a role from the known-roles list or type one above.
+            </p>
+
+            <div id="role-detail" hidden>
+              <p class="role-current">
+                role = <strong id="role-detail-name"></strong>
+              </p>
+
+              <div class="panel__block">
+                <h3>Direct permissions</h3>
+                <p class="hint">
+                  <code>GET /role-permissions</code> ·
+                  <code>PUT /update-role-permissions</code>
+                </p>
+                <p
+                  class="inline-status"
+                  id="perms-status"
+                  data-tone="muted"
+                ></p>
+                <ul class="tuple-list" id="perms-list"></ul>
+                <form class="tuple-form" id="add-perm-form">
+                  <label class="field field--grow">
+                    <span class="field__label">Object (resource)</span>
+                    <input
+                      type="text"
+                      id="add-perm-obj"
+                      required
+                      autocomplete="off"
+                      placeholder="member"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Action</span>
+                    <input
+                      type="text"
+                      id="add-perm-act"
+                      required
+                      autocomplete="off"
+                      placeholder="write"
+                    />
+                  </label>
+                  <button type="submit" class="btn btn--primary btn--small">
+                    Add permission
+                  </button>
+                </form>
+              </div>
+
+              <div class="panel__block">
+                <h3>Inherits from</h3>
+                <p class="hint">
+                  <code>GET /role-inheritance</code> ·
+                  <code>PUT /update-role-inheritance</code> — cycles are
+                  rejected by the service.
+                </p>
+                <p
+                  class="inline-status"
+                  id="parents-status"
+                  data-tone="muted"
+                ></p>
+                <ul class="tuple-list" id="parents-list"></ul>
+                <form class="tuple-form" id="add-parent-form">
+                  <label class="field field--grow">
+                    <span class="field__label">Role to inherit from</span>
+                    <input
+                      type="text"
+                      id="add-parent-input"
+                      list="known-roles"
+                      required
+                      autocomplete="off"
+                      placeholder="viewer"
+                    />
+                  </label>
+                  <button type="submit" class="btn btn--primary btn--small">
+                    Add inheritance
+                  </button>
+                </form>
+              </div>
+
+              <div class="panel__block">
+                <h3>Effective permissions</h3>
+                <p class="hint">
+                  Resolved by casbin across the whole inheritance graph.
+                </p>
+                <ul class="tuple-list" id="effective-list"></ul>
+              </div>
+
+              <div class="panel__block">
+                <div class="block-head">
+                  <h3>Accounts with this role</h3>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--small"
+                    id="load-role-accounts"
+                  >
+                    Load accounts
+                  </button>
+                </div>
+                <p class="hint"><code>GET /role-accounts</code></p>
+                <p
+                  class="inline-status"
+                  id="role-accounts-status"
+                  data-tone="muted"
+                ></p>
+                <ul class="account-list" id="role-accounts-list"></ul>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="panel panel--authz panel--accounts"
+            aria-labelledby="accounts-title"
+          >
+            <header class="panel__header">
+              <p class="eyebrow eyebrow--accent">authorization.py</p>
+              <h2 id="accounts-title">Accounts</h2>
+              <p class="panel__lede" style="max-width: 100%">
+                Assigning a role writes a <code>g</code> tuple from the
+                account's email to the role — accounts and roles live in the
+                same casbin graph.
+              </p>
+            </header>
+
+            <div class="accounts-grid">
+              <div class="panel__block">
+                <h3>Inspect an account</h3>
+                <p class="hint">
+                  <code>GET /account</code> — you can always read your own.
+                </p>
+                <form class="lookup" id="inspect-form">
+                  <label class="field field--grow">
+                    <span class="field__label">Email address</span>
+                    <input
+                      type="email"
+                      id="inspect-email"
+                      required
+                      autocomplete="off"
+                      placeholder="dev@university.edu"
+                    />
+                  </label>
+                  <button type="submit" class="btn btn--primary">
+                    Inspect account
+                  </button>
+                </form>
+                <p
+                  class="inline-status"
+                  id="inspect-status"
+                  data-tone="muted"
+                ></p>
+                <div id="inspect-result" hidden>
+                  <p class="result-label">Roles</p>
+                  <span class="chip-list" id="inspect-roles"></span>
+                  <p class="result-label">
+                    Flattened permissions (<code>obj:act</code>)
+                  </p>
+                  <ul class="tuple-list" id="inspect-perms"></ul>
+                </div>
+              </div>
+
+              <div class="panel__block">
+                <h3>Change an account's roles</h3>
+                <p class="hint">
+                  <code>PUT /update-account-roles</code> — you need
+                  <code>write</code> on every role you touch.
+                </p>
+                <form id="modify-form">
+                  <label class="field">
+                    <span class="field__label">Email address</span>
+                    <input
+                      type="email"
+                      id="modify-email"
+                      required
+                      autocomplete="off"
+                      placeholder="dev@university.edu"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Role</span>
+                    <input
+                      type="text"
+                      id="modify-role"
+                      list="known-roles"
+                      required
+                      autocomplete="off"
+                      placeholder="editor"
+                    />
+                  </label>
+                  <div class="form-actions">
+                    <button
+                      type="submit"
+                      class="btn btn--primary"
+                      name="intent"
+                      value="add"
+                    >
+                      Add role
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn btn--ghost"
+                      name="intent"
+                      value="remove"
+                    >
+                      Remove role
+                    </button>
+                  </div>
+                </form>
+                <p
+                  class="inline-status"
+                  id="modify-status"
+                  data-tone="muted"
+                ></p>
+                <div id="modify-result" hidden>
+                  <p class="result-label">Account roles now</p>
+                  <span class="chip-list" id="modify-roles"></span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
     </main>
 
-    <script src="script.js" defer></script>
-</body>
+    <!-- ──────────────────────────── Wire tape ──────────────────────────── -->
+    <section class="wire" id="wire" aria-label="Wire log of HTTP requests">
+      <div class="wire__bar">
+        <h2 class="wire__title">Wire</h2>
+        <span class="wire__count" id="wire-count">0 requests</span>
+        <span class="wire__spacer"></span>
+        <button type="button" class="btn btn--wire" id="wire-clear">
+          Clear
+        </button>
+        <button
+          type="button"
+          class="btn btn--wire"
+          id="wire-toggle"
+          aria-expanded="true"
+          aria-controls="wire-entries"
+        >
+          Collapse
+        </button>
+      </div>
+      <div class="wire__entries" id="wire-entries"></div>
+    </section>
 
+    <datalist id="known-roles"></datalist>
+
+    <script type="module" src="main.js"></script>
+  </body>
 </html>
