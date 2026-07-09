@@ -51,6 +51,16 @@ async function handleInspect(event) {
         );
     }
 
+    const inheritedRoles = account.inherited_roles ?? [];
+    document.getElementById('inspect-inherited-roles').replaceChildren(
+        ...inheritedRoles.map((role) => el('span', { className: 'chip chip--muted', text: role })),
+    );
+    if (!inheritedRoles.length) {
+        document.getElementById('inspect-inherited-roles').replaceChildren(
+            el('span', { className: 'hint', text: '(no inherited roles)' }),
+        );
+    }
+
     const permissions = account.permissions ?? [];
     document.getElementById('inspect-perms').replaceChildren(
         ...(permissions.length ? permissions : ['(none)']).map((permission) =>

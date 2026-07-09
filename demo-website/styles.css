@@ -661,6 +661,12 @@ main {
   padding: 0.12rem 0.6rem;
 }
 
+.chip--muted {
+  background-color: var(--paper);
+  border-color: var(--line-strong);
+  color: var(--ink-muted);
+}
+
 .role-list {
   list-style: none;
   margin: 0.5rem 0 0;
@@ -772,6 +778,10 @@ main {
   font-size: 0.82rem;
   font-weight: 700;
   margin: 0.75rem 0 0.3rem;
+}
+
+#inspect-result .result-label:not(:first-child) {
+  margin-top: 1.25rem;
 }
 
 /* ── Workbench ─────────────────────────────────────────────────── */
