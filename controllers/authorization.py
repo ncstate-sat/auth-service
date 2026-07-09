@@ -57,6 +57,7 @@ def get_roles(authorization: str = Header(default=None)):
 
     role_names = {sub for sub, _, _ in enforcer.get_policy()}
     role_names.update(enforcer.get_all_roles())
+    role_names.update(sub for sub, _ in enforcer.get_grouping_policy())
 
     return {
         'roles': sorted(name for name in role_names if not EMAIL_PATTERN.match(name))

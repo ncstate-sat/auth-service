@@ -47,12 +47,21 @@ def mock_enforce_by_role(allowed_roles):
 def test_get_roles(monkeypatch):
     """
     It should list all known role names, deduplicated and excluding emails.
+
+    This includes roles that have no direct permissions and only appear as
+    the subject of a grouping policy, i.e. a role that solely inherits from
+    other roles (e.g. 'admin' inheriting from 'clearance-manager' below).
     """
     monkeypatch.setattr(enforcer, 'get_policy', lambda: [
-        ['admin', 'member', 'write'],
+        ['clearance-manager', 'member', 'write'],
         ['member', 'member', 'read'],
     ])
     monkeypatch.setattr(enforcer, 'get_all_roles', lambda: ['member', 'liaison', MEMBER_ACCOUNT['email']])
+    monkeypatch.setattr(enforcer, 'get_grouping_policy', lambda: [
+        ['admin', 'clearance-manager'],
+        ['admin', 'liaison'],
+        [MEMBER_ACCOUNT['email'], 'member'],
+    ])
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
@@ -62,7 +71,7 @@ def test_get_roles(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {
-        'roles': ['admin', 'liaison', 'member']
+        'roles': ['admin', 'clearance-manager', 'liaison', 'member']
     }
 
     expired_response = client.get(
