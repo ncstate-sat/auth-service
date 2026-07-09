@@ -96,11 +96,13 @@ def get_account(response: Response,
 def get_accounts_with_role(response: Response,
                                     role: str,
                                     authorization: str = Header(default=None)):
-    """Gets all accounts with specified roles.
+    """Gets all accounts with specified roles directly assigned to them.
 
     It may be necessary to query all accounts with a certain
-    permission. This endpoint can query accounts and return that
-    list of accounts.
+    role. This endpoint can query by role and return a
+    list of accounts that have that role directly assigned. It will only
+    return accounts with the role explicitly assigned to that account,
+    not implicitly.
     """
 
     # Get the permissions of the requesting account.
@@ -158,7 +160,12 @@ def update_authorization(response: Response,
 def get_role_permissions(response: Response,
                          role: str,
                          authorization: str = Header(default=None)):
-    """Gets the permissions granted to a role."""
+    """
+    Gets the permissions granted to a role.
+    
+    It will only return the permissions explicitly assigned to that role,
+    not any inherited permissions from inherited roles.
+    """
 
     requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
