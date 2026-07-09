@@ -2,6 +2,28 @@
 
 This service handles all authentication and authorization needs for applications using JSON Web Tokens.
 
+## Quick Start
+
+Make sure your environment variables are set in a `.envrc` file (see the required variables below). There's a `sample_envrc` file provided for your convenience. For the quick start, the `MONGODB_URL` variable will be configured automatically.
+
+Run the make command to spin up the whole stack.
+
+```
+make up
+```
+
+Check out the running auth service in the Demo Bench. Run the command and then go to `localhost:3000` in your browser.
+
+```
+make demo
+```
+
+Shut it all down with the down command.
+
+```
+make down
+```
+
 ## Environment Variables
 
 | Name (Required \*) | Description                                                                                                                                                                                                                                                                                               | Example                                           |
@@ -18,6 +40,8 @@ A MongoDB database is required for this service to work. One database should exi
 ```
 docker run -p 27017:27017 --name auth-db -d mongo
 ```
+
+**Note:** The casbin library will set up and manage a `casbin_rule` collection. Don't edit that data manually — only casbin should manage the data in that collection.
 
 ## Bootstrapping the First Admin
 
@@ -43,20 +67,6 @@ Make sure the required environment variables are set, then run the project.
 make run-dev
 ```
 
-## Running the service + database in Docker
-
-Use Docker Compose to start both a database and a service container. It will expect any environment variables in a .env file.
-
-```
-docker compose up -d --build
-```
-
-To stop it from running:
-
-```
-docker compose down
-```
-
 ## Running the Tests
 
 Run `pytest` in the terminal to run all tests.
@@ -69,17 +79,26 @@ docker exec -it auth-service sh
 
 Then run `pytest`.
 
+## Updating Requirements
+
+Whenever you need to install a new package, add it to the `pyproject.toml` file in the dependencies array. Then, run the `update-requirements` command.
+
+```
+make update-requirements
+```
+
+This will generate a new set of base and dev requirements that are installed when the project is set up.
+
 ## Demo
 
-You can see a demo of this service and how it works by trying it out in a webpage. A demo website is provided in the `demo-website` folder. The contents of the folder must be served over port 3000 (or whichever port it configured in Google Cloud Platform) to work properly with Google Identity Services.
+You can see a demo of this service and how it works by trying it out in the demo bench. The site is provided in the `demo-website` folder and must be served over port 3000 (or whichever port it configured in Google Cloud Platform) to work properly with Google Identity Services.
 
 **Before running the website, set the Client ID on line 6 in `./demo-website/main.js`. It's the same as the `GOOGLE_CLIENT_ID` environment variable in this document.**
 
-You can serve the folder easily with the `http-server` package.
+Then you can run the demo command to serve the page.
 
 ```
-npm install -g http-server
-http-server -p 3000 ./demo-website
+make demo
 ```
 
 ## Endpoints

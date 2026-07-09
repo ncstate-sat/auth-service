@@ -16,3 +16,15 @@ install-dev:
 setup:
 	@echo 'Setting up the environment...'
 	make install-dev
+
+up:
+	@echo 'Spinning up the whole stack...'
+	docker compose up -d --build
+
+down:
+	@echo 'Shutting down the whole stack...'
+	docker compose down
+
+demo:
+	@echo 'Serving the demo website...'
+	npx http-server ./demo-website -p 3000
