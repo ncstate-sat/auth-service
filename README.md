@@ -69,9 +69,15 @@ make run-dev
 
 ## Running the Tests
 
-Run `pytest` in the terminal to run all tests.
+The tests need a MongoDB instance to run against. The easiest way to run them is:
 
-To run tests within a docker container, docker exec into the container.
+```
+make test
+```
+
+This spins up a temporary Mongo container, runs `pytest` against it, then shuts the container down and removes it (along with its volume) when the tests finish.
+
+If you already have the full stack running (`make up`), you can instead run tests inside the app container:
 
 ```
 docker exec -it auth-service sh

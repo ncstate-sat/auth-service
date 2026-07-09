@@ -25,6 +25,14 @@ down:
 	@echo 'Shutting down the whole stack...'
 	docker compose down
 
+test:
+	@echo 'Starting mongo for tests...'
+	docker compose up -d --wait mongo
+	MONGODB_URL=mongodb://localhost:27017/ pytest; EXIT_CODE=$$?; \
+	echo 'Stopping and removing mongo and its volumes...'; \
+	docker compose down -v; \
+	exit $$EXIT_CODE
+
 demo:
 	@echo 'Serving the demo website...'
 	npx http-server ./demo-website -p 3000
