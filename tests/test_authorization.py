@@ -4,7 +4,6 @@ import os
 from fastapi.testclient import TestClient
 from main import app
 from models.Token import Token
-import util.enforcer
 from util.enforcer import enforcer
 
 client = TestClient(app)
@@ -817,7 +816,7 @@ def test_root_admin_email_bypasses_authorization(monkeypatch):
     so the first role/permissions can be bootstrapped on a fresh system.
     """
     root_email = 'root@university.edu'
-    monkeypatch.setattr(util.enforcer, 'ROOT_ADMIN_EMAIL', root_email)
+    monkeypatch.setenv('ROOT_ADMIN_EMAIL', root_email)
     monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
     monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: [])
     monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
