@@ -88,6 +88,7 @@ def get_account(response: Response,
     return {
         'email': account.email,
         'roles': account.roles,
+        'inherited_roles': account.inherited_roles,
         'permissions': account.permissions
     }
 
@@ -150,6 +151,7 @@ def update_authorization(response: Response,
 
     account_response = account.__dict__.copy()
     account_response.pop('permissions', None)
+    account_response.pop('inherited_roles', None)
 
     return {
         'account': account_response

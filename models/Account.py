@@ -9,15 +9,18 @@ EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 class Account:
     """The Account model handles CRUD functions for accounts."""
-    email = None        # The email address of the account holder.
-    roles = []          # The top-level roles assigned to the user.
-    permissions = []    # The flattened list of granular permissions derived from the roles.
+    email = None           # The email address of the account holder.
+    roles = []             # The top-level roles assigned to the user.
+    inherited_roles = []   # Roles inherited transitively through the user's assigned roles.
+    permissions = []       # The flattened list of granular permissions derived from the roles.
 
     def __init__(self, config):
         if 'email' in config:
             self.email = config['email']
         if 'roles' in config:
             self.roles = list(set(config['roles']))
+        if 'inherited_roles' in config:
+            self.inherited_roles = list(set(config['inherited_roles']))
         if 'permissions' in config:
             self.permissions = list(set(config['permissions']))
 
@@ -26,6 +29,7 @@ class Account:
         if role not in self.roles:
             enforcer.add_grouping_policy(self.email, role)
             self.roles.append(role)
+            self.inherited_roles = Account._flatten_inherited_roles(self.email, self.roles)
             self.permissions = Account._flatten_permissions(self.email)
 
     def remove_role(self, role):
@@ -33,6 +37,7 @@ class Account:
         if role in self.roles:
             enforcer.remove_grouping_policy(self.email, role)
             self.roles.remove(role)
+            self.inherited_roles = Account._flatten_inherited_roles(self.email, self.roles)
             self.permissions = Account._flatten_permissions(self.email)
 
     def delete(self):
@@ -47,9 +52,11 @@ class Account:
         Parameters:
             email: The email address of the account.
         """
+        roles = enforcer.get_roles_for_user(email)
         return Account({
             'email': email,
-            'roles': enforcer.get_roles_for_user(email),
+            'roles': roles,
+            'inherited_roles': Account._flatten_inherited_roles(email, roles),
             'permissions': Account._flatten_permissions(email)
         })
 
@@ -90,3 +97,15 @@ class Account:
             f'{obj}:{act}'
             for _, obj, act in enforcer.get_implicit_permissions_for_user(email)
         })
+
+    @staticmethod
+    def _flatten_inherited_roles(email, roles=None):
+        """Finds the roles this user's assigned roles inherit from, transitively.
+
+        get_implicit_roles_for_user() returns the user's directly assigned roles plus
+        every role reachable from them, so the directly assigned roles are subtracted
+        out to leave only the ones gained through inheritance.
+        """
+        if roles is None:
+            roles = enforcer.get_roles_for_user(email)
+        return list(set(enforcer.get_implicit_roles_for_user(email)) - set(roles))

@@ -88,6 +88,7 @@ def test_get_account_self(monkeypatch):
     monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
     monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
     monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', mock_get_implicit_permissions_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
@@ -99,6 +100,7 @@ def test_get_account_self(monkeypatch):
     body = response.json()
     assert body['email'] == ADMIN_ACCOUNT['email']
     assert body['roles'] == ADMIN_ACCOUNT['roles']
+    assert body['inherited_roles'] == []
     assert set(body['permissions']) == set(ADMIN_ACCOUNT['permissions'])
 
 
@@ -111,6 +113,8 @@ def test_get_account(monkeypatch):
     monkeypatch.setattr(enforcer, 'get_roles_for_user',
                         lambda email: ADMIN_ACCOUNT['roles'] if email == ADMIN_ACCOUNT['email'] else MEMBER_ACCOUNT['roles'])
     monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user',
+                        lambda email: ADMIN_ACCOUNT['roles'] if email == ADMIN_ACCOUNT['email'] else MEMBER_ACCOUNT['roles'])
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
@@ -122,6 +126,33 @@ def test_get_account(monkeypatch):
     assert response.json() == {
         'email': MEMBER_ACCOUNT['email'],
         'roles': MEMBER_ACCOUNT['roles'],
+        'inherited_roles': [],
+        'permissions': []
+    }
+
+
+def test_get_account_inherited_roles(monkeypatch):
+    """
+    It should report roles inherited transitively through the account's
+    directly assigned roles, separately from those roles themselves.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user',
+                        lambda email: MEMBER_ACCOUNT['roles'] + ['guest'])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        f'/account?email={MEMBER_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'email': MEMBER_ACCOUNT['email'],
+        'roles': MEMBER_ACCOUNT['roles'],
+        'inherited_roles': ['guest'],
         'permissions': []
     }
 
@@ -166,6 +197,7 @@ def test_get_accounts_with_role(monkeypatch):
     monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['member']))
     monkeypatch.setattr(enforcer, 'get_roles_for_user', mock_get_roles_for_user)
     monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', mock_get_implicit_permissions_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', mock_get_roles_for_user)
     monkeypatch.setattr(enforcer, 'get_users_for_role', mock_get_users_for_role)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
@@ -179,6 +211,7 @@ def test_get_accounts_with_role(monkeypatch):
         'accounts': [{
             'email': MEMBER_ACCOUNT['email'],
             'roles': MEMBER_ACCOUNT['roles'],
+            'inherited_roles': [],
             'permissions': []
         }]
     }
@@ -209,6 +242,7 @@ def test_get_accounts_with_role_excludes_inheriting_roles(monkeypatch):
     monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['liaison']))
     monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
     monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
     monkeypatch.setattr(enforcer, 'get_users_for_role', mock_get_users_for_role)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
@@ -222,6 +256,7 @@ def test_get_accounts_with_role_excludes_inheriting_roles(monkeypatch):
         'accounts': [{
             'email': MEMBER_ACCOUNT['email'],
             'roles': MEMBER_ACCOUNT['roles'],
+            'inherited_roles': [],
             'permissions': []
         }]
     }
