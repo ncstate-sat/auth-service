@@ -2,112 +2,82 @@
 
 This service handles all authentication and authorization needs for applications using JSON Web Tokens.
 
+## Quick Start
+
+Make sure your environment variables are set in a `.envrc` file (see the required variables below). There's a `sample_envrc` file provided for your convenience. For the quick start, the `MONGODB_URL` variable will be configured automatically.
+
+Run the make command to spin up the whole stack.
+
+```
+make up
+```
+
+Check out the running auth service in the Demo Bench. Run the command and then go to `localhost:3000` in your browser.
+
+```
+make demo
+```
+
+Shut it all down with the down command.
+
+```
+make down
+```
+
 ## Environment Variables
 
-| Name (Required \*)      | Description                                                                                                                                                                                               | Example                                   |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| GOOGLE_CLIENT_ID\*      | This ID is required to decode Google Auth tokens, and it can be found in the Google Cloud Console.                                                                                                        | token.apps.googleusercontent.com          |
-| JWT_SECRET\*            | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                    | khMSpZkNsjwr                              |
-| MONGODB_URL\*           | The connection string to the MongoDB instance.  | mongodb://username:mypassword@ehps.university.edu |
+| Name (Required \*) | Description                                                                                                                                                                                                                                                                                               | Example                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| GOOGLE_CLIENT_ID\* | This ID is required to decode Google Auth tokens, and it can be found in the Google Cloud Console.                                                                                                                                                                                                        | token.apps.googleusercontent.com                  |
+| JWT_SECRET\*       | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                                                                                                                    | khMSpZkNsjwr                                      |
+| MONGODB_URL\*      | The connection string to the MongoDB instance.                                                                                                                                                                                                                                                            | mongodb://username:mypassword@ehps.university.edu |
+| ROOT_ADMIN_EMAIL   | The email address of a standing "break glass" identity that bypasses all authorization checks. Used to bootstrap the first role/permissions on a fresh system, and as a permanent recovery path if admin roles ever get misconfigured. Treat it like a secret; leave it unset once it's no longer needed. | you@university.edu                                |
 
 ## Minimum Database Requirements
 
-<details>
-<summary>Required: Database + Collection</summary>
-A MongoDB database is required for this service to work. One database should exist called `Accounts`, and it should contain two collections called `accounts` and `roles`.
-</details>
-<details>
-<summary>Database Setup</summary>
-Set up at least one account and one role according to the database schema in the section below.
-</details>
-<br>
-For development purposes, a MongoDB instance can be spun up easily with docker:
+A MongoDB database is required for this service to work. One database should exist called `auth_service`. For development purposes, a MongoDB instance can be spun up easily with docker:
 
 ```
 docker run -p 27017:27017 --name auth-db -d mongo
 ```
 
-## Database Schema
+**Note:** The casbin library will set up and manage a `casbin_rule` collection. Don't edit that data manually — only casbin should manage the data in that collection.
 
-### Collection: `accounts`
+## Bootstrapping the First Admin
 
-Documents in the `accounts` collection have three attributes (not including `_id`).
-| Name | Value | Type | Example |
-| --- | --- | --- | --- |
-| email | The full email address of the user. | String | user@university.edu |
-| roles | An array of roles assigned to the individual of the account. | Array[String] | [admin] |
+Roles and permissions are managed with [casbin](https://casbin.org/), and every role-management endpoint requires the requester to already have a permission granted through casbin. On a fresh system nobody has one, so `ROOT_ADMIN_EMAIL` provides a way in:
 
-### Collection: `roles`
-
-Documents in the `roles` collection have two attributes (not including `_id`).
-| Name | Value | Type | Example |
-| --- | --- | --- | --- |
-| name | The name of the role. This will appear in the `roles` attribute in account documents for anyone who has the role. | String | admin |
-| authorizations | A dictionary of values defining the authorizations for the role | Dict[String] | { '\_read': [], '\_write': [], 'root': true } |
-
-The authorizations dictionary can have any values; they'll appear in the token payload. There are three protected values for this dictionary, however.
-
-- `root`: This authorization means the account can read and write to anything without restrictions.
-- `_read`: This is an array of roles. Users can query this service for other accounts by role, and this defines which accounts are allowed to be queried. For example, a user with a `_read` value of `["liaison"]` will only be able to query liaison users.
-- `_write`: This is an array of roles. Users can assign roles if this is in their `_write` array. For example, a user with a `_write` value of `["liaison"]` will only be able to assign the `liaison` role to other users.
-
-### Example
-
-```json
-"roles": [
-    {
-        "_id": ObjectId('asdf'),
-        "name": "admin",
-        "authorizations": {
-            "root": true,
-            "_read": ["admin"],
-            "_write": ["admin"]
-        }
-    }
-]
-
-"accounts": [
-    {
-        "_id": ObjectId('asdf'),
-        "email": "user@university.edu",
-        "roles": ["admin"]
-    }
-]
-```
+1. Set `ROOT_ADMIN_EMAIL` to your own email address in the environment.
+2. Sign in as that email through the normal authentication flow (`/google-sign-in`).
+3. Using the auth token (from step 2 in the demo website), call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `write` access to itself and to any other roles it should manage.
+4. Call `PUT /update-account-roles` to grant yourself (or other accounts) that role.
+5. From here on, accounts with that role can manage roles/permissions on their own — `ROOT_ADMIN_EMAIL` can be left set as a permanent recovery path or unset once you're confident real admin accounts are in place. While it's set, it's a standing bypass of all authorization checks, so treat it like a secret.
 
 ## Running on your Local Machine
 
 Install dependencies.
 
 ```
-pip install -r requirements.txt
+make setup
 ```
 
 Make sure the required environment variables are set, then run the project.
 
 ```
-uvicorn main:app --reload
-```
-
-## Running in a Docker Container
-
-Build the image.
-
-```
-docker build -t auth-service .
-```
-
-Run the container, ensuring it's set up with the required environment variables.
-
-```
-docker run -p 8000:8000 --env-file .env auth-service
+make run-dev
 ```
 
 ## Running the Tests
 
-Run `pytest` in the terminal to run all tests.
+The tests need a MongoDB instance to run against. The easiest way to run them is:
 
-To run tests within a docker container, docker exec into the container.
+```
+make test
+```
+
+This spins up a temporary Mongo container, runs `pytest` against it, then shuts the container down and removes it (along with its volume) when the tests finish.
+
+If you already have the full stack running (`make up`), you can instead run tests inside the app container:
 
 ```
 docker exec -it auth-service sh
@@ -115,17 +85,26 @@ docker exec -it auth-service sh
 
 Then run `pytest`.
 
-## Demo
+## Updating Requirements
 
-You can see a demonstration of this service by trying it out in a webpage. A demo website is provided in the `demo-website` folder. The contents of the folder must be served over port 3000 (or whichever port it configured in Google Cloud Platform) to work properly with Google Identity Services.
-
-**Before running the website, set the Client ID on line 123 in `index.html`. It's the same as the `GOOGLE_CLIENT_ID` environment variable in this document.**
-
-You can serve the folder easily with the `http-server` package.
+Whenever you need to install a new package, add it to the `pyproject.toml` file in the dependencies array. Then, run the `update-requirements` command.
 
 ```
-npm install -g http-server
-http-server -p 3000 ./demo-website
+make update-requirements
+```
+
+This will generate a new set of base and dev requirements that are installed when the project is set up.
+
+## Demo
+
+You can see a demo of this service and how it works by trying it out in the demo bench. The site is provided in the `demo-website` folder and must be served over port 3000 (or whichever port it configured in Google Cloud Platform) to work properly with Google Identity Services.
+
+**Before running the website, set the Client ID on line 6 in `./demo-website/main.js`. It's the same as the `GOOGLE_CLIENT_ID` environment variable in this document.**
+
+Then you can run the demo command to serve the page.
+
+```
+make demo
 ```
 
 ## Endpoints
