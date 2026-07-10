@@ -4,7 +4,6 @@
 #
 #    pip-compile --output-file=requirements/base/base.txt pyproject.toml
 #
---extra-index-url https://pypi.ehps.ncsu.edu/
 
 annotated-doc==0.0.4
     # via fastapi
