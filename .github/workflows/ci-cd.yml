@@ -1,0 +1,44 @@
+name: CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: "Run Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+      - name: Create virtual environment
+        run: python -m venv venv
+      - name: Install dependencies
+        run: |
+          source venv/bin/activate
+          make setup
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          make test
+
+  build-and-push:
+    name: "Build & Push"
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build and push Docker image
+        run: |
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/auth-service:latest
+          docker build . -t $IMAGE_ID
+          docker push $IMAGE_ID
