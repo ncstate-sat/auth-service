@@ -11,11 +11,13 @@ REFRESH_TOKEN_EXP_TIME = timedelta(days=2)
 
 class Token:
     @staticmethod
-    def decode_google_token(token):
+    def decode_google_token(token, audience=None):
         """Decodes a token from Google Identity Services.
         :param token: The token from Google.
+        :param audience: The accepted 'aud' value, or a list of them. Defaults to GOOGLE_CLIENT_ID.
         """
-        return id_token.verify_oauth2_token(token, google_auth_requests.Request(), os.getenv('GOOGLE_CLIENT_ID'))
+        return id_token.verify_oauth2_token(token, google_auth_requests.Request(),
+                                            audience or os.getenv('GOOGLE_CLIENT_ID'))
 
     @staticmethod
     def decode_token(token):

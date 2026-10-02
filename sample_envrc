@@ -1,0 +1,5 @@
+export GOOGLE_CLIENT_ID=<>
+export JWT_SECRET=<>
+export MONGODB_URL=mongodb://localhost:27017
+export ROOT_ADMIN_EMAIL=<>
+export GOOGLE_SERVICE_AUDIENCES=<>
