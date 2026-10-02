@@ -9,7 +9,12 @@ export const API_BASE = 'http://localhost:8000';
 
 // Endpoints served by controllers/authentication.py; everything else
 // on this service is authorization.py. Drives the wire tape's hue.
-const AUTHN_PATHS = new Set(['/google-sign-in', '/login', '/refresh-token']);
+const AUTHN_PATHS = new Set([
+    '/google-sign-in',
+    '/service-account/google-sign-in',
+    '/login',
+    '/refresh-token',
+]);
 
 let bearerToken = null;
 let recorder = null;
@@ -26,9 +31,11 @@ export function onRecord(callback) {
 /**
  * Performs a fetch and records it. Returns { ok, status, body, error }.
  * Options: query (object of search params), body (JSON-serialized),
- * auth (attach the bearer token, default true).
+ * auth (attach the bearer token, default true), and asServiceAccount
+ * (a service account's token to send instead of the session's, so the
+ * signed-in user's session is never replaced).
  */
-export async function request(method, path, { query, body, auth = true } = {}) {
+export async function request(method, path, { query, body, auth = true, asServiceAccount } = {}) {
     const url = new URL(path, API_BASE);
     for (const [key, value] of Object.entries(query ?? {})) {
         url.searchParams.set(key, value);
@@ -38,14 +45,16 @@ export async function request(method, path, { query, body, auth = true } = {}) {
     if (body !== undefined) {
         headers['Content-Type'] = 'application/json';
     }
-    if (auth && bearerToken) {
-        headers['Authorization'] = `Bearer ${bearerToken}`;
+    const token = asServiceAccount ?? bearerToken;
+    if (auth && token) {
+        headers['Authorization'] = `Bearer ${token}`;
     }
 
     const entry = {
         method,
         path: url.pathname + url.search,
         side: AUTHN_PATHS.has(path) ? 'authn' : 'authz',
+        asServiceAccount: Boolean(auth && asServiceAccount),
         requestHeaders: { ...headers },
         requestBody: body,
     };

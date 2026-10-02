@@ -3,7 +3,7 @@
  * each entry expandable to the full request and response.
  */
 
-import { el, prettyJson, announce } from './ui.js';
+import { el, prettyJson, announce, syncScrollRegion } from './ui.js';
 
 const MAX_ENTRIES = 50;
 
@@ -50,6 +50,9 @@ export function recordEntry(entry) {
     const summary = el('summary', {}, [
         el('span', { className: 'wire-entry__method', text: entry.method }),
         el('span', { className: 'wire-entry__path', text: entry.path }),
+        ...(entry.asServiceAccount
+            ? [el('span', { className: 'wire-entry__actor', text: 'as service account' })]
+            : []),
         el('span', {
             className: `wire-entry__status wire-entry__status--${failed ? 'error' : 'ok'}`,
             text: statusText,
@@ -83,6 +86,12 @@ export function recordEntry(entry) {
         className: 'wire-entry',
         attrs: { 'data-side': entry.side },
     }, [summary, body]);
+
+    details.addEventListener('toggle', () => {
+        for (const pre of details.querySelectorAll('.wire-entry__pre')) {
+            syncScrollRegion(pre, `${entry.method} ${entry.path}, ${pre.previousElementSibling.textContent}`);
+        }
+    });
 
     entriesEl.prepend(details);
     while (entriesEl.children.length > MAX_ENTRIES) {

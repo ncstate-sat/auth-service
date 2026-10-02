@@ -32,6 +32,7 @@ make down
 | JWT_SECRET\*       | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                                                                                                                    | khMSpZkNsjwr                                      |
 | MONGODB_URL\*      | The connection string to the MongoDB instance.                                                                                                                                                                                                                                                            | mongodb://username:mypassword@ehps.university.edu |
 | ROOT_ADMIN_EMAIL   | The email address of a standing "break glass" identity that bypasses all authorization checks. Used to bootstrap the first role/permissions on a fresh system, and as a permanent recovery path if admin roles ever get misconfigured. Treat it like a secret; leave it unset once it's no longer needed. | you@university.edu                                |
+| GOOGLE_SERVICE_AUDIENCES | A comma-separated list of the `aud` values accepted on Google ID tokens from service accounts (see [Service Accounts](#service-accounts)). Defaults to `GOOGLE_CLIENT_ID`. | https://auth.university.edu |
 
 ## Minimum Database Requirements
 
@@ -52,6 +53,38 @@ Roles and permissions are managed with [casbin](https://casbin.org/), and every 
 3. Using the auth token (from step 2 in the demo website), call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `write` access to itself and to any other roles it should manage.
 4. Call `PUT /update-account-roles` to grant yourself (or other accounts) that role.
 5. From here on, accounts with that role can manage roles/permissions on their own — `ROOT_ADMIN_EMAIL` can be left set as a permanent recovery path or unset once you're confident real admin accounts are in place. While it's set, it's a standing bypass of all authorization checks, so treat it like a secret.
+
+## Service Accounts
+
+Backend services authenticate as **Google Cloud service accounts**, the same way browser apps authenticate people: the service gets a Google-signed ID token on its own, then exchanges it for this service's auth token.
+
+```python
+import requests
+import google.auth.transport.requests
+from google.oauth2 import id_token
+
+# On Google Cloud this uses the metadata server; elsewhere, GOOGLE_APPLICATION_CREDENTIALS.
+google_token = id_token.fetch_id_token(google.auth.transport.requests.Request(), AUDIENCE)
+response = requests.post(f'{AUTH_SERVICE}/service-account/google-sign-in', json={'token': google_token})
+auth_token = response.json()['token']
+```
+
+For local testing (and the demo website), mint the same kind of token from a service account's JSON key file:
+
+```
+python -m util.service_account_credential path/to/key.json --audience AUDIENCE
+```
+
+The audience defaults to the first value in `GOOGLE_SERVICE_AUDIENCES` (or `GOOGLE_CLIENT_ID`). Pass `-` instead of a path to read the key from stdin. From Python, `util.service_account_credential.mint_credential(key, audience)` does the same thing. Key files are long-lived secrets: keep them out of the repo, and prefer attaching the service account to the workload on Google Cloud, where no key is needed.
+
+Service accounts work like people: any service account can sign in, and what it can do comes from the roles granted to its email through `PUT /update-account-roles`. A service account with no roles gets a token with no permissions, just like an unknown user. The differences:
+
+- **Separate endpoints.** `/google-sign-in` rejects service accounts, and `/service-account/google-sign-in` only accepts them.
+- **The audience is configurable.** A service account picks its own audience when it mints an ID token, so tokens are checked against `GOOGLE_SERVICE_AUDIENCES`, which defaults to `GOOGLE_CLIENT_ID`. The auth service's own URL is a good choice.
+- **No refresh tokens.** The auth token still expires after 15 minutes; the service mints a new ID token and signs in again. `/refresh-token` rejects service accounts.
+- **Tokens say who's calling.** Every token payload has an `account_type` of `user` or `service`.
+
+To cut off a service account, remove its roles. Auth tokens it already holds keep their old roles until they expire, within 15 minutes.
 
 ## Running on your Local Machine
 

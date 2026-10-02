@@ -246,6 +246,219 @@
         </ol>
       </section>
 
+      <!-- ───────────────────── Service account handshake ───────────────────── -->
+      <section
+        class="panel panel--authn"
+        aria-labelledby="sa-handshake-title"
+      >
+        <header class="panel__header">
+          <p class="eyebrow eyebrow--accent">authentication.py</p>
+          <h2 id="sa-handshake-title">Service account handshake</h2>
+          <p class="panel__lede" style="max-width: 100%">
+            Backend services sign in as Google Cloud service accounts. The
+            service mints its own Google-signed ID token, then trades it at
+            <code>/service-account/google-sign-in</code> for an auth token
+            marked <code>"account_type": "service"</code>. Like a person, any
+            service account can sign in; what it can do comes from the roles
+            granted to its email in the Accounts panel. It gets no refresh
+            token — it signs in again when the token expires. Nothing here
+            touches your own session.
+          </p>
+        </header>
+
+        <div class="panel__block sa-mint">
+          <h3 id="sa-mint-title">Mint a credential</h3>
+          <p class="hint" id="sa-mint-hint">
+            A browser should never hold a service account key, so mint the ID
+            token in a terminal: run this command from the root of this repo
+            with the service account's JSON key file, then paste the token it
+            prints below. The audience has to be listed in the service's
+            <code>GOOGLE_SERVICE_AUDIENCES</code>, which defaults to
+            <code>GOOGLE_CLIENT_ID</code>.
+          </p>
+          <div class="sa-mint__fields">
+            <label class="field field--grow">
+              <span class="field__label">Key file path</span>
+              <input
+                type="text"
+                id="sa-mint-key-path"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="path/to/key.json"
+                aria-describedby="sa-mint-hint sa-mint-key-error"
+              />
+            </label>
+            <label class="field field--grow">
+              <span class="field__label">Audience</span>
+              <input
+                type="text"
+                id="sa-mint-audience"
+                autocomplete="off"
+                aria-describedby="sa-mint-hint"
+              />
+            </label>
+          </div>
+          <p class="inline-error" id="sa-mint-key-error" hidden></p>
+          <div class="artifact">
+            <div class="artifact__row">
+              <span class="artifact__label">Command</span>
+              <button
+                type="button"
+                class="copy-btn"
+                data-copy-target="sa-mint-command"
+                aria-label="Copy command"
+              >
+                Copy
+              </button>
+            </div>
+            <pre class="code-block code-block--grow" id="sa-mint-command"></pre>
+          </div>
+          <details class="decoded">
+            <summary>How a backend service does this</summary>
+            <p class="hint">
+              On Google Cloud (Cloud Run, GKE, Compute Engine) the metadata
+              server mints the token, so no key file is needed. Cache the auth
+              token and sign in again shortly before it expires.
+            </p>
+            <pre class="code-block code-block--tall" id="sa-python-snippet"></pre>
+          </details>
+        </div>
+
+        <form class="panel__block" id="sa-exchange-form">
+          <label class="field">
+            <span class="field__label">Google ID token</span>
+            <textarea
+              id="sa-credential-input"
+              rows="4"
+              required
+              spellcheck="false"
+              autocomplete="off"
+              aria-describedby="sa-credential-hint"
+            ></textarea>
+          </label>
+          <p class="hint" id="sa-credential-hint">
+            Kept in page memory only. Google ID tokens expire after an hour.
+          </p>
+          <div class="form-actions">
+            <button type="submit" class="btn btn--primary">
+              Exchange for auth token
+            </button>
+            <button type="button" class="btn btn--ghost" id="sa-reset">
+              Clear
+            </button>
+          </div>
+        </form>
+
+        <ol class="rail rail--spaced" aria-label="Service account handshake steps">
+          <li class="station station--pending" id="sa-station-1">
+            <span
+              class="status-badge status-badge--step status-badge--pending"
+              data-step="1"
+              >Pending</span
+            >
+            <h3 class="station__title">Google credential</h3>
+            <p class="station__endpoint"><code>metadata server / key file</code></p>
+            <p class="station__description">
+              The pasted ID token is decoded in the browser. Look for the
+              service account's <code>email</code>, the <code>aud</code> it
+              chose, and its unique <code>sub</code>.
+            </p>
+            <p class="inline-error" id="sa-station-error-1" hidden></p>
+            <div class="artifact">
+              <div class="artifact__row">
+                <span class="artifact__label">Google credential</span>
+                <button
+                  type="button"
+                  class="copy-btn"
+                  data-copy-target="raw-sa-credential"
+                  aria-label="Copy service account Google credential"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre class="code-block" id="raw-sa-credential"></pre>
+              <details class="decoded" id="details-sa-credential" hidden>
+                <summary>Decoded JWT</summary>
+                <p class="decoded__heading">Header</p>
+                <pre class="code-block" id="decoded-sa-credential-header"></pre>
+                <p class="decoded__heading">Payload</p>
+                <pre class="code-block" id="decoded-sa-credential-payload"></pre>
+              </details>
+            </div>
+          </li>
+
+          <li class="station station--pending" id="sa-station-2">
+            <span
+              class="status-badge status-badge--step status-badge--pending"
+              data-step="2"
+              >Pending</span
+            >
+            <h3 class="station__title">Token exchange</h3>
+            <p class="station__endpoint">
+              <code>POST /service-account/google-sign-in</code>
+            </p>
+            <p class="station__description">
+              The service verifies the credential, looks up the service
+              account's roles and flattened permissions through casbin, and
+              signs them into a 15-minute auth token. No refresh token is
+              issued.
+            </p>
+            <p class="inline-error" id="sa-station-error-2" hidden></p>
+            <div class="artifact">
+              <div class="artifact__row">
+                <span class="artifact__label">Auth token</span>
+                <button
+                  type="button"
+                  class="copy-btn"
+                  data-copy-target="raw-sa-token"
+                  aria-label="Copy service account auth token"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre class="code-block" id="raw-sa-token"></pre>
+              <details class="decoded" id="details-sa-token" hidden>
+                <summary>Decoded JWT</summary>
+                <p class="decoded__heading">Header</p>
+                <pre class="code-block" id="decoded-sa-token-header"></pre>
+                <p class="decoded__heading">Payload</p>
+                <pre class="code-block" id="decoded-sa-token-payload"></pre>
+              </details>
+            </div>
+          </li>
+
+          <li class="station station--pending" id="sa-station-3">
+            <span
+              class="status-badge status-badge--step status-badge--pending"
+              data-step="3"
+              >Pending</span
+            >
+            <h3 class="station__title">Call as the service account</h3>
+            <p class="station__endpoint"><code>POST /login</code></p>
+            <p class="station__description">
+              The auth token goes out as a bearer token, exactly as the backend
+              would send it to another service. The wire tags these requests
+              “as service account”.
+            </p>
+            <p class="inline-error" id="sa-station-error-3" hidden></p>
+            <div class="artifact">
+              <div class="artifact__row">
+                <span class="artifact__label">Response payload</span>
+                <button
+                  type="button"
+                  class="copy-btn"
+                  data-copy-target="raw-sa-payload"
+                  aria-label="Copy service account response payload"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre class="code-block" id="raw-sa-payload"></pre>
+            </div>
+          </li>
+        </ol>
+      </section>
+
       <!-- ──────────────────────────── Workbench ──────────────────────────── -->
       <div class="workbench workbench--locked" id="workbench">
         <p class="workbench__lock" id="workbench-lock" role="note">
@@ -604,6 +817,7 @@
               </div>
             </div>
           </section>
+
         </div>
       </div>
     </main>

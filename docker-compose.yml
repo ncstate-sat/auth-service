@@ -12,9 +12,13 @@ services:
         condition: service_healthy
 
   mongo:
-    image: mongo:latest
+    image: mongo:8.0
     environment:
       MONGO_INITDB_DATABASE: auth_service
+      # MongoDB 8+ won't start on Linux kernel 6.19+ with the image's default
+      # (glibc.pthread.rseq=0); see https://jira.mongodb.org/browse/SERVER-121912.
+      # Remove once a MongoDB release ships a fixed TCMalloc.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
     volumes:
       - mongo-data:/data/db
     ports:

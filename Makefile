@@ -35,4 +35,5 @@ test:
 
 demo:
 	@echo 'Serving the demo website...'
-	npx http-server ./demo-website -p 3000
+	# -c-1 disables caching, so edits to the site show up on a normal reload.
+	npx http-server ./demo-website -p 3000 -c-1

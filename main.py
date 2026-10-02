@@ -23,10 +23,17 @@ The payload of the token contains the user's email address, their roles, and a f
     "permissions": ["member:read", "member:write"]
 }
 ```
+Every payload also carries an `account_type` of either `user` or `service`, so a service receiving the token can tell whether a person or another service is calling it.
+
 Roles and permissions are managed with [casbin](https://casbin.org/). Each permission is a `resource:action` pair granted to a role (for example, `member:write` lets a role grant or revoke the `member` role on other accounts), and can be changed at any time. Users can be assigned any number of roles, and they inherit every permission granted to each of those roles.
 
 ## Token Expiration & Refresh
 Each auth JWT expires 15 minutes after it's generated. After expiring, the token is useless. To keep using the apps and services, a new token will have to be generated. So the user doesn't have to sign in every 15 minutes, a refresh token is used. Upon signing in, an auth token and refresh token is sent to the client. After the auth token expires, the refresh token can be used to generate another auth token. That refresh token expires 2 days after being generated, and it's replaced every time the auth token is replaced.
+
+## Service Accounts
+Backend services authenticate as Google Cloud service accounts. A service mints a Google-signed ID token for its own service account (for example, with `google.oauth2.id_token.fetch_id_token`) and exchanges it at `/service-account/google-sign-in` for an auth token, the same way a browser app exchanges a user's credential at `/google-sign-in`.
+
+Service accounts get roles through `/update-account-roles` like any other account. Service accounts don't receive refresh tokens; when the auth token expires, they mint a new ID token and sign in again.
 """
 
 app = FastAPI(

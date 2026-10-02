@@ -12,6 +12,7 @@ import { initSession, onSessionChange } from './session.js';
 import { handleCredential, resetHandshake, reportSignInUnavailable } from './handshake.js';
 import { initRoles, loadRoles, resetRoles } from './roles.js';
 import { initAccounts, resetAccounts, prefillEmail } from './accounts.js';
+import { initServiceHandshake } from './service-handshake.js';
 
 initCopyButtons();
 initWire();
@@ -19,6 +20,7 @@ onRecord(recordEntry);
 initSession();
 initRoles();
 initAccounts();
+initServiceHandshake(GOOGLE_CLIENT_ID);
 
 let signedIn = false;
 

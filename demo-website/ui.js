@@ -64,6 +64,24 @@ export function setStatus(elementId, message, tone = 'muted') {
     status.dataset.tone = tone;
 }
 
+/**
+ * Makes a code block keyboard-scrollable when its content overflows:
+ * a focusable, named region, so keyboard users can scroll it. Blocks
+ * that fit are left out of the tab order. Call after changing content.
+ */
+export function syncScrollRegion(block, label) {
+    const overflows = block.scrollHeight > block.clientHeight + 1 || block.scrollWidth > block.clientWidth + 1;
+    if (overflows) {
+        block.tabIndex = 0;
+        block.setAttribute('role', 'region');
+        block.setAttribute('aria-label', label);
+    } else {
+        block.removeAttribute('tabindex');
+        block.removeAttribute('role');
+        block.removeAttribute('aria-label');
+    }
+}
+
 /** Wires up every [data-copy-target] button through one delegated listener. */
 export function initCopyButtons() {
     document.addEventListener('click', (event) => {

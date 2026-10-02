@@ -5,7 +5,7 @@
  */
 
 import { request, setBearerToken, errorMessage } from './api.js';
-import { decodeJwt, el, prettyJson, announce, setStatus } from './ui.js';
+import { decodeJwt, el, prettyJson, announce, setStatus, syncScrollRegion } from './ui.js';
 
 let state = null; // { token, refreshToken, payload }
 let countdownTimer = null;
@@ -27,7 +27,22 @@ export function getSessionEmail() {
     return state?.payload?.email ?? null;
 }
 
+const SESSION_BLOCK_LABELS = {
+    'session-token-raw': 'Auth token',
+    'session-token-payload': 'Auth token, decoded payload',
+    'session-refresh-raw': 'Refresh token',
+    'session-refresh-payload': 'Refresh token, decoded payload',
+};
+
+/** Lets keyboard users scroll any token block that overflows. */
+function syncSessionScrollRegions() {
+    for (const [id, label] of Object.entries(SESSION_BLOCK_LABELS)) {
+        syncScrollRegion(document.getElementById(id), label);
+    }
+}
+
 export function initSession() {
+    document.querySelector('.session__tokens').addEventListener('toggle', syncSessionScrollRegions);
     document.getElementById('session-refresh').addEventListener('click', refreshSession);
     document.getElementById('session-sign-out').addEventListener('click', () => {
         endSession();
@@ -73,6 +88,7 @@ function renderSignedIn() {
     document.getElementById('session-refresh-raw').textContent = state.refreshToken;
     document.getElementById('session-refresh-payload').textContent =
         prettyJson(decodeJwt(state.refreshToken)?.payload ?? null);
+    syncSessionScrollRegions();
 }
 
 async function refreshSession() {

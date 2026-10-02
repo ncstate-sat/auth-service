@@ -27,7 +27,7 @@ INVALID_SIGNATURE_JWT = (
 
 def test_decode_google_token(monkeypatch):
     def mock_decode_google_token(*args, **kwargs):
-        return {'email': EMAIL}
+        return {'email': EMAIL, 'email_verified': True, 'sub': '1234567890'}
 
     def mock_find_by_email(*args, **kwargs):
         return Account({'email': EMAIL, 'roles': [], 'permissions': []})
@@ -40,6 +40,7 @@ def test_decode_google_token(monkeypatch):
     assert 'token' in response.json()
     assert 'refresh_token' in response.json()
     assert 'error' not in response.json()
+    assert response.json()['payload']['account_type'] == 'user'
 
 
 def test_decode_token():
@@ -66,7 +67,7 @@ def test_refresh_token(monkeypatch):
 
     monkeypatch.setattr(Account, 'find_by_email', mock_find_by_email)
 
-    refresh_token = Token.generate_refresh_token({'email': EMAIL})
+    refresh_token = Token.generate_refresh_token(EMAIL)
 
     response = client.post('/refresh-token',
                            json={'token': refresh_token})
