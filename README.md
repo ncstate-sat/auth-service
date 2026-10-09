@@ -32,7 +32,6 @@ make down
 | JWT_SECRET\*       | This key is used to encode and decode JWT's sent to clients. It should be a cryptic string that is shared across services that need to decode the JWT.                                                                                                                                                    | khMSpZkNsjwr                                      |
 | MONGODB_URL\*      | The connection string to the MongoDB instance.                                                                                                                                                                                                                                                            | mongodb://username:mypassword@ehps.university.edu |
 | ROOT_ADMIN_EMAIL   | The email address of a standing "break glass" identity that bypasses all authorization checks. Used to bootstrap the first role/permissions on a fresh system, and as a permanent recovery path if admin roles ever get misconfigured. Treat it like a secret; leave it unset once it's no longer needed. | you@university.edu                                |
-| GOOGLE_SERVICE_AUDIENCES | A comma-separated list of the `aud` values accepted on Google ID tokens from service accounts (see [Service Accounts](#service-accounts)). Defaults to `GOOGLE_CLIENT_ID`. | https://auth.university.edu |
 
 ## Minimum Database Requirements
 
@@ -64,7 +63,7 @@ import google.auth.transport.requests
 from google.oauth2 import id_token
 
 # On Google Cloud this uses the metadata server; elsewhere, GOOGLE_APPLICATION_CREDENTIALS.
-google_token = id_token.fetch_id_token(google.auth.transport.requests.Request(), AUDIENCE)
+google_token = id_token.fetch_id_token(google.auth.transport.requests.Request(), GOOGLE_CLIENT_ID)
 response = requests.post(f'{AUTH_SERVICE}/service-account/google-sign-in', json={'token': google_token})
 auth_token = response.json()['token']
 ```
@@ -72,15 +71,15 @@ auth_token = response.json()['token']
 For local testing (and the demo website), mint the same kind of token from a service account's JSON key file:
 
 ```
-python -m util.service_account_credential path/to/key.json --audience AUDIENCE
+python -m util.service_account_credential path/to/key.json
 ```
 
-The audience defaults to the first value in `GOOGLE_SERVICE_AUDIENCES` (or `GOOGLE_CLIENT_ID`). Pass `-` instead of a path to read the key from stdin. From Python, `util.service_account_credential.mint_credential(key, audience)` does the same thing. Key files are long-lived secrets: keep them out of the repo, and prefer attaching the service account to the workload on Google Cloud, where no key is needed.
+It reads `GOOGLE_CLIENT_ID` from the environment and uses it as the token's audience. Pass `-` instead of a path to read the key from stdin. From Python, `util.service_account_credential.mint_credential(key)` does the same thing. Key files are long-lived secrets: keep them out of the repo, and prefer attaching the service account to the workload on Google Cloud, where no key is needed.
 
 Service accounts work like people: any service account can sign in, and what it can do comes from the roles granted to its email through `PUT /update-account-roles`. A service account with no roles gets a token with no permissions, just like an unknown user. The differences:
 
 - **Separate endpoints.** `/google-sign-in` rejects service accounts, and `/service-account/google-sign-in` only accepts them.
-- **The audience is configurable.** A service account picks its own audience when it mints an ID token, so tokens are checked against `GOOGLE_SERVICE_AUDIENCES`, which defaults to `GOOGLE_CLIENT_ID`. The auth service's own URL is a good choice.
+- **The audience is `GOOGLE_CLIENT_ID`.** A service account picks the audience when it mints an ID token, and it must use this service's `GOOGLE_CLIENT_ID`, the same audience user tokens have.
 - **No refresh tokens.** The auth token still expires after 15 minutes; the service mints a new ID token and signs in again. `/refresh-token` rejects service accounts.
 - **Tokens say who's calling.** Every token payload has an `account_type` of `user` or `service`.
 

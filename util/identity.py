@@ -5,7 +5,6 @@ controllers don't depend on any one provider's token format. Only Google
 is supported today; Entra ID is expected to be added as another verifier.
 """
 
-import os
 import re
 from dataclasses import dataclass
 
@@ -25,26 +24,14 @@ class Identity:
     email: str      # The identity's verified email address.
 
 
-def service_account_audiences():
-    """The 'aud' values accepted on Google ID tokens from service accounts.
-
-    Service accounts choose their own audience when minting an ID token, so
-    this is configurable through GOOGLE_SERVICE_AUDIENCES (comma-separated),
-    falling back to GOOGLE_CLIENT_ID.
-    """
-    audiences = os.getenv('GOOGLE_SERVICE_AUDIENCES', '')
-    audiences = [aud.strip() for aud in audiences.split(',') if aud.strip()]
-    return audiences or [os.getenv('GOOGLE_CLIENT_ID')]
-
-
-def verify_google_credential(token, audience=None):
+def verify_google_credential(token):
     """Verifies a Google-signed ID token and returns its Identity.
 
     Raises HTTPException(401) if the token is invalid, expired, issued for a
     different audience, or doesn't carry a verified email address.
     """
     try:
-        google_info = Token.decode_google_token(token, audience)
+        google_info = Token.decode_google_token(token)
     except (ValueError, GoogleAuthError) as e:
         raise HTTPException(401, detail=f'The Google credential could not be verified: {e}')
 

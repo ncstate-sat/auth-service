@@ -81,23 +81,6 @@ def test_service_account_sign_in_invalid_credential(monkeypatch):
     assert response.status_code == 401
 
 
-def test_service_account_sign_in_audiences(monkeypatch):
-    """Service account tokens are verified against GOOGLE_SERVICE_AUDIENCES."""
-    audiences = []
-
-    def mock_decode(token, audience=None):
-        audiences.append(audience)
-        return {'email': SA_EMAIL, 'sub': SA_SUB, 'email_verified': True}
-
-    monkeypatch.setenv('GOOGLE_SERVICE_AUDIENCES', 'https://auth.university.edu, other-audience')
-    monkeypatch.setattr(Token, 'decode_google_token', mock_decode)
-    monkeypatch.setattr(Account, 'find_by_email', mock_account([]))
-
-    client.post('/service-account/google-sign-in', json={'token': 'token'})
-
-    assert audiences == [['https://auth.university.edu', 'other-audience']]
-
-
 def test_user_sign_in_rejects_service_accounts(monkeypatch):
     """Service accounts can't get a user token (and refresh token) through /google-sign-in."""
     monkeypatch.setattr(Token, 'decode_google_token', mock_google_token(SA_EMAIL))

@@ -28,7 +28,7 @@ docker compose down
 docker exec -it auth-service sh   # then run pytest inside the container
 ```
 
-Required env vars (see `sample_envrc` / README): `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `MONGODB_URL`, optional `ROOT_ADMIN_EMAIL` and `GOOGLE_SERVICE_AUDIENCES`. Tests set `JWT_SECRET` inline and monkeypatch the Casbin enforcer, so they don't need a real Mongo instance or Google credentials.
+Required env vars (see `sample_envrc` / README): `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `MONGODB_URL`, optional `ROOT_ADMIN_EMAIL`. Tests set `JWT_SECRET` inline and monkeypatch the Casbin enforcer, so they don't need a real Mongo instance or Google credentials.
 
 There is no separate lint/typecheck make target, but `ruff`, `black`, `mypy`, and `bandit` are in the dev dependencies (`pyproject.toml`) and configured there — run them directly (e.g. `ruff check .`, `mypy .`) if asked to lint/typecheck.
 
@@ -43,7 +43,7 @@ There is no separate lint/typecheck make target, but `ruff`, `black`, `mypy`, an
 - Permissions are `(role, obj, act)` triples (a "policy"); role inheritance is a `(role, inherited_role)` grouping policy. `update-role-inheritance` explicitly rejects cycles (self and transitive) before calling `add_grouping_policy` — see `controllers/authorization.py`.
 - A role is considered "known" (surfaced by `GET /roles`) if it appears as a policy subject or anywhere in `get_all_roles()`; there's no independent role registry.
 
-**Service accounts:** backend services sign in as Google Cloud service accounts at `/service-account/google-sign-in` and are treated like users — no registry; their roles are Casbin grouping edges on their email, and a service account with no roles just gets an empty-permission token. They get no refresh token, tokens carry `account_type: service` (users get `user`), and `/google-sign-in` and `/refresh-token` reject `*.iam.gserviceaccount.com` emails so service accounts can never obtain a refresh token. Google ID-token verification for both flows goes through `util/identity.py`; service account tokens are checked against `GOOGLE_SERVICE_AUDIENCES` (defaults to `GOOGLE_CLIENT_ID`).
+**Service accounts:** backend services sign in as Google Cloud service accounts at `/service-account/google-sign-in` and are treated like users — no registry; their roles are Casbin grouping edges on their email, and a service account with no roles just gets an empty-permission token. They get no refresh token, tokens carry `account_type: service` (users get `user`), and `/google-sign-in` and `/refresh-token` reject `*.iam.gserviceaccount.com` emails so service accounts can never obtain a refresh token. Google ID-token verification for both flows goes through `util/identity.py`; both are checked against the `GOOGLE_CLIENT_ID` audience.
 
 **Tokens** (`models/Token.py`): auth JWTs expire in 15 minutes, refresh tokens in 2 days, both HS256-signed with `JWT_SECRET`. `decode_token` translates expired/invalid-signature JWT errors into `HTTPException(401)` / `HTTPException(400)` respectively — controllers rely on this rather than catching JWT errors themselves.
 

@@ -2,8 +2,7 @@ from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel
 from models.Account import Account
 from models.Token import Token
-from util.identity import (SERVICE_ACCOUNT_EMAIL_PATTERN, service_account_audiences,
-                           verify_google_credential)
+from util.identity import SERVICE_ACCOUNT_EMAIL_PATTERN, verify_google_credential
 
 router = APIRouter()
 
@@ -48,14 +47,14 @@ def service_account_google_login(response: Response, body: TokenRequestBody):
     """Authenticates a Google Cloud service account.
 
     The token is a Google-signed ID token minted by the service account itself (for example, with
-    `google.oauth2.id_token.fetch_id_token`), with an audience listed in `GOOGLE_SERVICE_AUDIENCES`.
+    `google.oauth2.id_token.fetch_id_token`), with `GOOGLE_CLIENT_ID` as its audience.
 
     Like a user, any service account can sign in; what it can do comes from the roles granted to it
     through `/update-account-roles`. Returned is an auth token with `account_type` set to `service`.
     No refresh token is issued; when the auth token expires, the service account mints a new Google
     ID token and signs in again.
     """
-    identity = verify_google_credential(body.token, service_account_audiences())
+    identity = verify_google_credential(body.token)
 
     if not SERVICE_ACCOUNT_EMAIL_PATTERN.match(identity.email):
         response.status_code = status.HTTP_403_FORBIDDEN

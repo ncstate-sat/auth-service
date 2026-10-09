@@ -272,9 +272,9 @@
             A browser should never hold a service account key, so mint the ID
             token in a terminal: run this command from the root of this repo
             with the service account's JSON key file, then paste the token it
-            prints below. The audience has to be listed in the service's
-            <code>GOOGLE_SERVICE_AUDIENCES</code>, which defaults to
-            <code>GOOGLE_CLIENT_ID</code>.
+            prints below. The command reads <code>GOOGLE_CLIENT_ID</code> from
+            the environment and uses it as the token's audience, so set it the
+            same way you do for the service.
           </p>
           <div class="sa-mint__fields">
             <label class="field field--grow">
@@ -286,15 +286,6 @@
                 spellcheck="false"
                 placeholder="path/to/key.json"
                 aria-describedby="sa-mint-hint sa-mint-key-error"
-              />
-            </label>
-            <label class="field field--grow">
-              <span class="field__label">Audience</span>
-              <input
-                type="text"
-                id="sa-mint-audience"
-                autocomplete="off"
-                aria-describedby="sa-mint-hint"
               />
             </label>
           </div>

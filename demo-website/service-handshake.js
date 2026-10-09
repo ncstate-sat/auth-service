@@ -17,10 +17,9 @@ const setStationStatus = createRail('sa-', {
 
 const JWT_PREFIXES = ['sa-credential', 'sa-token'];
 
-export function initServiceHandshake(defaultAudience) {
+export function initServiceHandshake(googleClientId) {
     const keyPathInput = document.getElementById('sa-mint-key-path');
-    const audienceInput = document.getElementById('sa-mint-audience');
-    audienceInput.value = defaultAudience ?? '';
+    const renderSnippets = () => renderSnippetsFor(googleClientId);
 
     const snippet = document.getElementById('sa-python-snippet');
     snippet.closest('details').addEventListener('toggle', () => syncScrollRegion(snippet, 'Python example'));
@@ -29,7 +28,6 @@ export function initServiceHandshake(defaultAudience) {
         rejectPastedKey(keyPathInput);
         renderSnippets();
     });
-    audienceInput.addEventListener('input', renderSnippets);
     renderSnippets();
 
     document.getElementById('sa-exchange-form').addEventListener('submit', handleExchange);
@@ -40,28 +38,25 @@ export function initServiceHandshake(defaultAudience) {
     });
 }
 
-function renderSnippets() {
+function renderSnippetsFor(googleClientId) {
     const keyPath = document.getElementById('sa-mint-key-path').value.trim() || 'path/to/key.json';
-    const audience = document.getElementById('sa-mint-audience').value.trim() || 'AUDIENCE';
 
-    document.getElementById('sa-mint-command').textContent = [
-        `python -m util.service_account_credential ${shellQuote(keyPath)} \\`,
-        `  --audience ${shellQuote(audience)}`,
-    ].join('\n');
+    document.getElementById('sa-mint-command').textContent =
+        `python -m util.service_account_credential ${shellQuote(keyPath)}`;
 
     document.getElementById('sa-python-snippet').textContent = `import requests
 import google.auth.transport.requests
 from google.oauth2 import id_token
 
 AUTH_SERVICE = '${API_BASE}'
-AUDIENCE = '${audience}'
+GOOGLE_CLIENT_ID = '${googleClientId}'
 
 
 def get_auth_token():
     # On Google Cloud, this asks the metadata server for an ID token for the
     # attached service account. Elsewhere, it uses the key file named by
     # GOOGLE_APPLICATION_CREDENTIALS.
-    google_token = id_token.fetch_id_token(google.auth.transport.requests.Request(), AUDIENCE)
+    google_token = id_token.fetch_id_token(google.auth.transport.requests.Request(), GOOGLE_CLIENT_ID)
 
     response = requests.post(f'{AUTH_SERVICE}/service-account/google-sign-in',
                              json={'token': google_token})

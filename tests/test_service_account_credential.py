@@ -11,7 +11,7 @@ from google.oauth2 import _client
 from util.service_account_credential import main, mint_credential
 
 SA_EMAIL = 'reports@project.iam.gserviceaccount.com'
-AUDIENCE = 'https://auth.university.edu'
+CLIENT_ID = 'client-id.apps.googleusercontent.com'
 GOOGLE_ID_TOKEN = 'google.id.token'
 
 _private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -35,6 +35,11 @@ KEY = {
 }
 
 
+@pytest.fixture(autouse=True)
+def client_id(monkeypatch):
+    monkeypatch.setenv('GOOGLE_CLIENT_ID', CLIENT_ID)
+
+
 @pytest.fixture
 def token_endpoint(monkeypatch):
     """Stubs Google's token endpoint, recording the signed assertions sent to it."""
@@ -50,28 +55,26 @@ def token_endpoint(monkeypatch):
 
 
 def test_mint_credential(token_endpoint):
-    """It signs a request for an ID token with the requested audience, using the key."""
-    assert mint_credential(KEY, AUDIENCE) == GOOGLE_ID_TOKEN
-    assert mint_credential(json.dumps(KEY), AUDIENCE) == GOOGLE_ID_TOKEN
+    """It signs a request for an ID token for GOOGLE_CLIENT_ID, using the key."""
+    assert mint_credential(KEY) == GOOGLE_ID_TOKEN
+    assert mint_credential(json.dumps(KEY)) == GOOGLE_ID_TOKEN
 
     [assertion, _] = token_endpoint
     assert assertion['iss'] == SA_EMAIL
-    assert assertion['target_audience'] == AUDIENCE
+    assert assertion['target_audience'] == CLIENT_ID
 
 
-def test_mint_credential_default_audience(monkeypatch, token_endpoint):
-    """Without an audience, it uses the first audience this service accepts."""
-    monkeypatch.setenv('GOOGLE_SERVICE_AUDIENCES', f'{AUDIENCE}, other-audience')
-
-    mint_credential(KEY)
-
-    assert token_endpoint[0]['target_audience'] == AUDIENCE
+def test_mint_credential_requires_client_id(monkeypatch):
+    """It can't pick an audience without GOOGLE_CLIENT_ID."""
+    monkeypatch.delenv('GOOGLE_CLIENT_ID')
+    with pytest.raises(ValueError, match='GOOGLE_CLIENT_ID'):
+        mint_credential(KEY)
 
 
 def test_mint_credential_rejects_other_keys():
     """It only accepts service account keys."""
     with pytest.raises(ValueError):
-        mint_credential({**KEY, 'type': 'authorized_user'}, AUDIENCE)
+        mint_credential({**KEY, 'type': 'authorized_user'})
 
 
 def test_main(tmp_path, monkeypatch, capsys, token_endpoint):
@@ -79,11 +82,11 @@ def test_main(tmp_path, monkeypatch, capsys, token_endpoint):
     key_file = tmp_path / 'key.json'
     key_file.write_text(json.dumps(KEY))
 
-    main([str(key_file), '--audience', AUDIENCE])
+    main([str(key_file)])
     assert capsys.readouterr().out.strip() == GOOGLE_ID_TOKEN
 
     monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(KEY)))
-    main(['-', '--audience', AUDIENCE])
+    main(['-'])
     assert capsys.readouterr().out.strip() == GOOGLE_ID_TOKEN
 
 
@@ -93,4 +96,4 @@ def test_main_reports_errors(tmp_path):
     key_file.write_text(json.dumps({**KEY, 'type': 'authorized_user'}))
 
     with pytest.raises(SystemExit, match='Could not mint a credential'):
-        main([str(key_file), '--audience', AUDIENCE])
+        main([str(key_file)])
