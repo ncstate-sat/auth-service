@@ -1,0 +1,31 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+
+### Metadata for the template itself goes here (name, namespace if needed, etc)
+metadata:
+  name: ${APP_NAME}-prereq-template
+labels:
+  app: ${APP_NAME}
+
+parameters:
+- name: APP_NAME
+  required: true
+  value: auth-service
+- name: APP_NAMESPACE
+  required: true
+  value: auth-service
+
+objects:
+- apiVersion: cert-manager.io/v1
+  kind: Certificate
+  metadata:
+    name: ${APP_NAME}-tls
+    namespace: ${APP_NAMESPACE}
+  spec:
+    secretName: route-tls
+    dnsNames:
+      - auth.services.staging.ehps.ncsu.edu
+    issuerRef:
+      name: certinext
+      kind: ClusterIssuer
+      group: cert-manager.io
