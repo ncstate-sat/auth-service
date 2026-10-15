@@ -50,10 +50,15 @@ objects:
                 secretKeyRef:
                   key: JWT_SECRET
                   name: auth-service-secrets
-            - name: GOOGLE_CLIENT_SECRET
+            - name: GOOGLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  key: GOOGLE_CLIENT_SECRET
+                  key: GOOGLE_CLIENT_ID
+                  name: auth-service-secrets      
+            - name: ROOT_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  key: ROOT_ADMIN_EMAIL
                   name: auth-service-secrets
 
 - apiVersion: v1
@@ -76,9 +81,6 @@ objects:
   metadata:
     name: ${APP_NAME}
     namespace: ${APP_NAMESPACE}
-    annotations:
-      cert-manager.io/issuer-kind: ClusterIssuer
-      cert-manager.io/issuer-name: sectigo
     labels:
       app: ${APP_NAME}
   spec:
