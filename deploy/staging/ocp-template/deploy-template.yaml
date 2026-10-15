@@ -1,0 +1,100 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: auth-service-template
+labels:
+  app: ${APP_NAME}
+
+parameters:
+- name: IMAGE_TAG
+  required: true
+- name: APP_NAME
+  required: true
+  value: auth-service
+- name: APP_NAMESPACE
+  value: auth-service
+
+objects:
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: ${APP_NAME}
+    namespace: ${APP_NAMESPACE}
+  spec:
+    selector:
+      matchLabels:
+        app: ${APP_NAME}
+    replicas: 1
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        labels:
+          app: ${APP_NAME}
+      spec:
+        containers:
+          - name: ${APP_NAME}
+            image: satregistry.ehps.ncsu.edu/auth-service/auth-service:${IMAGE_TAG}
+            imagePullPolicy: IfNotPresent
+            envFrom:
+            - configMapRef:
+                name: auth-service-config
+            env:
+            - name: MONGODB_URL
+              valueFrom:
+                secretKeyRef:
+                  key: MONGODB_URL
+                  name: auth-service-secrets
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: JWT_SECRET
+                  name: auth-service-secrets
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  key: GOOGLE_CLIENT_ID
+                  name: auth-service-secrets      
+            - name: ROOT_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  key: ROOT_ADMIN_EMAIL
+                  name: auth-service-secrets
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${APP_NAME}
+    namespace: ${APP_NAMESPACE}
+    labels:
+      app: ${APP_NAME}
+  spec:
+    selector:
+      app: ${APP_NAME}
+    ports:
+      - port: 8000
+        targetPort: 8000
+        protocol: TCP
+
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: ${APP_NAME}
+    namespace: ${APP_NAMESPACE}
+    labels:
+      app: ${APP_NAME}
+  spec:
+    to:
+      kind: Service
+      name: ${APP_NAME}
+    port:
+      targetPort: 8000
+    host: auth.services.staging.ehps.ncsu.edu
+    path: /
+    tls:
+      externalCertificate:
+        name: route-tls
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+      certificate: null
+      key: null
