@@ -15,7 +15,8 @@ class Token:
         """Decodes a token from Google Identity Services.
         :param token: The token from Google.
         """
-        return id_token.verify_oauth2_token(token, google_auth_requests.Request(), os.getenv('GOOGLE_CLIENT_ID'))
+        return id_token.verify_oauth2_token(token, google_auth_requests.Request(),
+                                            os.getenv('GOOGLE_CLIENT_ID'))
 
     @staticmethod
     def decode_token(token):
