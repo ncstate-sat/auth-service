@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: auth-service-config
-  namespace: auth-service
-data:
-  DEBUG: "True"
-  GOOGLE_CLIENT_ID: 4944492663-6msau4peegvm3oqa9pbgsmncorfkj5sa.apps.googleusercontent.com
