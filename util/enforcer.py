@@ -5,7 +5,7 @@ import casbin_pymongo_adapter
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'model.conf')
 
 adapter = casbin_pymongo_adapter.Adapter(
-    os.getenv('MONGODB_URL', 'mongodb://localhost:27017/'), "auth_service"
+    os.getenv("MONGODB_URL", "mongodb://localhost:27017/"), os.getenv("MONGODB_DB_NAME")
 )
 
 enforcer = casbin.Enforcer(MODEL_PATH, adapter, True)
