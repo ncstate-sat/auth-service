@@ -455,8 +455,10 @@
         <p class="workbench__lock" id="workbench-lock" role="note">
           Sign in to use the workbench — it needs the auth token from the
           handshake to call the authorization endpoints. Reads require
-          <code>read</code> permission on the role in question, writes require
-          <code>write</code>; denials come back as <code>400</code> and land on
+          <code>read</code> permission on the role in question, changing a
+          role's permissions or inheritance requires <code>write</code>, and
+          granting or revoking a role requires <code>assign</code>; denials
+          come back as <code>400</code> and land on
           the wire like everything else.
         </p>
 
@@ -753,7 +755,7 @@
                 <h3>Change an account's roles</h3>
                 <p class="hint">
                   <code>PUT /update-account-roles</code> — you need
-                  <code>write</code> on every role you touch.
+                  <code>assign</code> on every role you touch.
                 </p>
                 <form id="modify-form">
                   <label class="field">
