@@ -811,6 +811,201 @@
 
         </div>
       </div>
+
+      <!-- ───────────────────────────── Role tags ───────────────────────────── -->
+      <section class="panel panel--authz" aria-labelledby="role-tags-title">
+        <header class="panel__header">
+          <p class="eyebrow eyebrow--accent">role_tags.py</p>
+          <h2 id="role-tags-title">Role tags</h2>
+          <p class="panel__lede" style="max-width: 100%">
+            Tags are labels you define, such as <code>User</code> and
+            <code>Feature</code>, and then assign to roles in the role metadata
+            panel below. A tag can't be deleted while any role still has it.
+            These endpoints aren't auth-protected yet, so this panel works
+            without signing in.
+          </p>
+        </header>
+
+        <div class="split-grid">
+          <div class="panel__block">
+            <div class="block-head">
+              <h3 id="role-tags-list-title" tabindex="-1">Registered tags</h3>
+              <button type="button" class="btn btn--ghost" id="load-role-tags">
+                Reload tags
+              </button>
+            </div>
+            <p class="hint">
+              <code>GET /role-tags</code> ·
+              <code>DELETE /role-tags/{name}</code>
+            </p>
+            <p
+              class="inline-status"
+              id="role-tags-status"
+              data-tone="muted"
+            ></p>
+            <table class="metadata-table" id="role-tags-table" hidden>
+              <caption class="visually-hidden">
+                Registered tags
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Tag</th>
+                  <th scope="col">
+                    <span class="visually-hidden">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="role-tags-rows"></tbody>
+            </table>
+          </div>
+
+          <div class="panel__block">
+            <h3>Add a tag</h3>
+            <p class="hint" id="role-tag-form-hint">
+              <code>POST /role-tags</code> registers a tag. Tag names must be
+              unique, ignoring case.
+            </p>
+            <form id="role-tag-form" aria-describedby="role-tag-form-hint">
+              <label class="field">
+                <span class="field__label">Tag name</span>
+                <input
+                  type="text"
+                  id="role-tag-name"
+                  required
+                  autocomplete="off"
+                  placeholder="Feature"
+                />
+              </label>
+              <div class="form-actions">
+                <button type="submit" class="btn btn--primary">Add tag</button>
+              </div>
+            </form>
+            <p
+              class="inline-status"
+              id="role-tag-form-status"
+              data-tone="muted"
+            ></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────── Role metadata ─────────────────────────── -->
+      <section
+        class="panel panel--authz"
+        aria-labelledby="role-metadata-title"
+      >
+        <header class="panel__header">
+          <p class="eyebrow eyebrow--accent">role_metadata.py</p>
+          <h2 id="role-metadata-title">Role metadata</h2>
+          <p class="panel__lede" style="max-width: 100%">
+            Each role can have an optional alias (a display name) and any of
+            the tags registered above.
+            This is stored separately from casbin, so saving or deleting
+            metadata never changes a role's permissions, inheritance, or
+            accounts. These endpoints aren't auth-protected yet, so this panel
+            works without signing in.
+          </p>
+        </header>
+
+        <div class="split-grid">
+          <div class="panel__block">
+            <div class="block-head">
+              <h3 id="role-metadata-list-title" tabindex="-1">
+                Roles with metadata
+              </h3>
+              <button
+                type="button"
+                class="btn btn--ghost"
+                id="load-role-metadata"
+              >
+                Reload metadata
+              </button>
+            </div>
+            <p class="hint">
+              <code>GET /role-metadata</code> ·
+              <code>DELETE /role-metadata/{role}</code>
+            </p>
+            <p
+              class="inline-status"
+              id="role-metadata-status"
+              data-tone="muted"
+            ></p>
+            <table class="metadata-table" id="role-metadata-table" hidden>
+              <caption class="visually-hidden">
+                Roles with metadata
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Role</th>
+                  <th scope="col">Alias</th>
+                  <th scope="col">Tags</th>
+                  <th scope="col">
+                    <span class="visually-hidden">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="role-metadata-rows"></tbody>
+            </table>
+          </div>
+
+          <div class="panel__block">
+            <h3>Set a role's metadata</h3>
+            <p class="hint" id="role-metadata-form-hint">
+              <code>POST /role-metadata</code> creates the metadata, or updates
+              it if the role already has some. Saving replaces the role's alias
+              and tags with what's in this form, so leave the alias empty or
+              uncheck every tag to clear them. Aliases must be unique across
+              roles, ignoring case.
+            </p>
+            <form
+              id="role-metadata-form"
+              aria-describedby="role-metadata-form-hint"
+            >
+              <label class="field">
+                <span class="field__label">Role name</span>
+                <input
+                  type="text"
+                  id="role-metadata-role"
+                  list="known-roles"
+                  required
+                  autocomplete="off"
+                  placeholder="security-liaison"
+                />
+              </label>
+              <label class="field">
+                <span class="field__label">Alias (optional)</span>
+                <input
+                  type="text"
+                  id="role-metadata-alias"
+                  autocomplete="off"
+                  placeholder="Security Liaison"
+                />
+              </label>
+              <fieldset
+                class="perm-rows"
+                aria-describedby="role-metadata-tags-empty"
+              >
+                <legend>Tags (optional)</legend>
+                <div class="tag-options" id="role-metadata-tags"></div>
+                <p class="hint" id="role-metadata-tags-empty">
+                  No tags are registered yet. Add one in the Role tags panel.
+                </p>
+              </fieldset>
+              <div class="form-actions">
+                <button type="submit" class="btn btn--primary">
+                  Save metadata
+                </button>
+                <button type="reset" class="btn btn--ghost">Clear form</button>
+              </div>
+            </form>
+            <p
+              class="inline-status"
+              id="role-metadata-form-status"
+              data-tone="muted"
+            ></p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- ──────────────────────────── Wire tape ──────────────────────────── -->

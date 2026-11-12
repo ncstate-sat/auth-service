@@ -2,10 +2,15 @@
 The starting point for the auth service.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from controllers.authentication import router as authentication_router
 from controllers.authorization import router as authorization_router
+from controllers.role_metadata import router as role_metadata_router
+from controllers.role_tags import router as role_tags_router
+from models.RoleMetadata import RoleMetadata
+from models.RoleTag import RoleTag
 
 
 DESCRIPTION = """
@@ -34,12 +39,23 @@ Each auth JWT expires 15 minutes after it's generated. After expiring, the token
 Backend services authenticate as Google Cloud service accounts. A service mints a Google-signed ID token for its own service account (for example, with `google.oauth2.id_token.fetch_id_token`) and exchanges it at `/service-account/google-sign-in` for an auth token, the same way a browser app exchanges a user's credential at `/google-sign-in`.
 
 Service accounts get roles through `/update-account-roles` like any other account. Service accounts don't receive refresh tokens; when the auth token expires, they mint a new ID token and sign in again.
+
+## Role Metadata
+A role can optionally carry an `alias` (a display name, unique across roles regardless of case) and `tags`. Which tags exist is up to you: register them at `/role-tags` (for example, `User` and `Feature`), then assign any of them to a role. This metadata is stored separately from casbin and never changes a role's permissions, inheritance, or accounts. `POST /role-metadata` creates a role's metadata or updates it if it already exists, and `GET /role-metadata?tag=...` lists the roles with a given tag. A tag can't be deleted while any role still has it. These endpoints are not auth-protected yet.
 """
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    RoleMetadata.ensure_indexes()
+    RoleTag.ensure_indexes()
+    yield
 
 app = FastAPI(
     title='Auth Service',
     description=DESCRIPTION,
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -59,3 +75,5 @@ def welcome():
 
 app.include_router(authentication_router)
 app.include_router(authorization_router)
+app.include_router(role_metadata_router)
+app.include_router(role_tags_router)

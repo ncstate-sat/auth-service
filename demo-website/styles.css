@@ -552,7 +552,8 @@ main {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   font-family: var(--font-mono);
   font-size: 0.88rem;
   width: 100%;
@@ -830,17 +831,86 @@ main {
     grid-column: 1 / -1;
   }
 
-  .accounts-grid {
+  .accounts-grid,
+  .split-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 2rem;
   }
 
-  .accounts-grid .panel__block {
+  .accounts-grid .panel__block,
+  .split-grid .panel__block {
     border-top: none;
     margin-top: 0;
     padding-top: 1rem;
   }
+}
+
+/* ── Role metadata table ───────────────────────────────────────── */
+
+.metadata-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-bottom: 0.5rem;
+}
+
+.metadata-table th,
+.metadata-table td {
+  text-align: left;
+  vertical-align: middle;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  /* long role names must wrap to reflow at 320px */
+  overflow-wrap: anywhere;
+}
+
+.metadata-table thead th {
+  overflow-wrap: normal;
+  font-size: 0.82rem;
+  border-bottom: 2px solid var(--line-strong);
+}
+
+.metadata-table tbody th {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.tag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.tag-options:empty {
+  display: none;
+}
+
+.tag-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.tag-option input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--authz);
+}
+
+.metadata-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
 }
 
 /* ── Wire tape (signature element) ─────────────────────────────── */

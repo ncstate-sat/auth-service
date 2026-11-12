@@ -13,6 +13,8 @@ import { handleCredential, resetHandshake, reportSignInUnavailable } from './han
 import { initRoles, loadRoles, resetRoles } from './roles.js';
 import { initAccounts, resetAccounts, prefillEmail } from './accounts.js';
 import { initServiceHandshake } from './service-handshake.js';
+import { initRoleMetadata, loadRoleMetadata, renderTagOptions } from './role-metadata.js';
+import { initRoleTags, loadRoleTags } from './role-tags.js';
 
 initCopyButtons();
 initWire();
@@ -21,6 +23,10 @@ initSession();
 initRoles();
 initAccounts();
 initServiceHandshake(GOOGLE_CLIENT_ID);
+initRoleTags({ onTagsLoaded: renderTagOptions });
+initRoleMetadata();
+loadRoleTags();
+loadRoleMetadata();
 
 let signedIn = false;
 
