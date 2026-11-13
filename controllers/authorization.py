@@ -197,10 +197,10 @@ def update_role_permissions(response: Response,
     requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
-    if not is_authorized(requesting_account.email, body.role, 'write'):
+    if not is_authorized(requesting_account.email, body.role, 'roleupdate'):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': f'This account is not authorized to write to the {body.role} role\'s permissions.'
+            'error': f'This account is not authorized to update the {body.role} role\'s permissions.'
         }
 
     for permission in body.remove_permissions:
@@ -251,10 +251,10 @@ def update_role_inheritance(response: Response,
     requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
-    if not is_authorized(requesting_account.email, body.role, 'write'):
+    if not is_authorized(requesting_account.email, body.role, 'roleupdate'):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': f'This account is not authorized to write to the {body.role} role\'s inheritance.'
+            'error': f'This account is not authorized to update the {body.role} role\'s inheritance.'
         }
 
     for inherited_role in body.add_inherited_roles:

@@ -12,8 +12,8 @@ ADMIN_ACCOUNT = {
     'email': 'admin@university.edu',
     'roles': ['admin'],
     'permissions': [
-        'admin:read', 'admin:write', 'admin:assign',
-        'member:read', 'member:write', 'member:assign'
+        'admin:read', 'admin:roleupdate', 'admin:assign',
+        'member:read', 'member:roleupdate', 'member:assign'
     ]
 }
 
@@ -617,11 +617,98 @@ def test_assign_permission_does_not_allow_changing_role(monkeypatch):
 
     assert permissions_response.status_code == 400
     assert permissions_response.json() == {
-        'error': 'This account is not authorized to write to the dev role\'s permissions.'
+        'error': 'This account is not authorized to update the dev role\'s permissions.'
     }
     assert inheritance_response.status_code == 400
     assert inheritance_response.json() == {
-        'error': 'This account is not authorized to write to the dev role\'s inheritance.'
+        'error': 'This account is not authorized to update the dev role\'s inheritance.'
+    }
+
+
+def test_write_permission_does_not_allow_changing_role(monkeypatch):
+    """
+    It should not let write on a resource create or change a role of the same
+    name, through either its permissions or its inheritance.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_permission(['data:write']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    permissions_response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_permissions': [{'obj': 'data', 'act': 'read'}]
+        }
+    )
+    inheritance_response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_inherited_roles': ['member']
+        }
+    )
+
+    assert permissions_response.status_code == 400
+    assert permissions_response.json() == {
+        'error': 'This account is not authorized to update the data role\'s permissions.'
+    }
+    assert inheritance_response.status_code == 400
+    assert inheritance_response.json() == {
+        'error': 'This account is not authorized to update the data role\'s inheritance.'
+    }
+
+
+def test_roleupdate_permission_allows_changing_role(monkeypatch):
+    """
+    It should let roleupdate on a role change that role's permissions and inheritance.
+    """
+    role_policies = []
+    inherited_roles = []
+
+    def mock_add_policy(role, obj, act):
+        role_policies.append([role, obj, act])
+
+    def mock_add_grouping_policy(_role, inherited_role):
+        inherited_roles.append(inherited_role)
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_permission(['data:roleupdate']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda name: inherited_roles)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda name: [])
+    monkeypatch.setattr(enforcer, 'add_policy', mock_add_policy)
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', mock_add_grouping_policy)
+    monkeypatch.setattr(enforcer, 'get_filtered_policy',
+                        lambda _index, role: [p for p in role_policies if p[0] == role])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    permissions_response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_permissions': [{'obj': 'data', 'act': 'read'}]
+        }
+    )
+    inheritance_response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_inherited_roles': ['member']
+        }
+    )
+
+    assert permissions_response.status_code == 200
+    assert permissions_response.json() == {
+        'permissions': [{'obj': 'data', 'act': 'read'}]
+    }
+    assert inheritance_response.status_code == 200
+    assert inheritance_response.json() == {
+        'inherited_roles': ['member']
     }
 
 
@@ -723,7 +810,7 @@ def test_update_role_permissions_unauthorized(monkeypatch):
 
     assert response.status_code == 400
     assert response.json() == {
-        'error': 'This account is not authorized to write to the admin role\'s permissions.'
+        'error': 'This account is not authorized to update the admin role\'s permissions.'
     }
 
 
@@ -881,7 +968,7 @@ def test_update_role_inheritance_unauthorized(monkeypatch):
 
     assert response.status_code == 400
     assert response.json() == {
-        'error': 'This account is not authorized to write to the admin role\'s inheritance.'
+        'error': 'This account is not authorized to update the admin role\'s inheritance.'
     }
 
 

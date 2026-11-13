@@ -49,7 +49,7 @@ Roles and permissions are managed with [casbin](https://casbin.org/), and every 
 
 1. Set `ROOT_ADMIN_EMAIL` to your own email address in the environment.
 2. Sign in as that email through the normal authentication flow (`/google-sign-in`).
-3. Using the auth token (from step 2 in the demo website), call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `write` and `assign` access to itself and to any other roles it should manage. `write` covers a role's permissions and inheritance; `assign` covers granting or revoking the role on accounts.
+3. Using the auth token (from step 2 in the demo website), call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `roleupdate` and `assign` access to itself and to any other roles it should manage. `roleupdate` covers a role's permissions and inheritance; `assign` covers granting or revoking the role on accounts.
 4. Call `PUT /update-account-roles` to grant yourself (or other accounts) that role.
 5. From here on, accounts with that role can manage roles/permissions on their own — `ROOT_ADMIN_EMAIL` can be left set as a permanent recovery path or unset once you're confident real admin accounts are in place. While it's set, it's a standing bypass of all authorization checks, so treat it like a secret.
 
