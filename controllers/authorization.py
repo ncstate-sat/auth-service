@@ -137,7 +137,9 @@ def update_authorization(response: Response,
     account = Account.find_by_email(body.email)
 
     changed_roles = body.add_roles + body.remove_roles
-    is_permitted = all(is_authorized(requesting_account.email, role, 'write') for role in changed_roles)
+    is_permitted = all(
+        is_authorized(requesting_account.email, role, 'assign') for role in changed_roles
+    )
 
     if is_permitted:
         for role in body.remove_roles:
@@ -147,7 +149,7 @@ def update_authorization(response: Response,
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': 'This account is not authorized to write to this user\'s authorization(s).'
+            'error': 'This account is not authorized to assign or revoke these role(s).'
         }
 
     account_response = account.__dict__.copy()
@@ -195,10 +197,10 @@ def update_role_permissions(response: Response,
     requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
-    if not is_authorized(requesting_account.email, body.role, 'write'):
+    if not is_authorized(requesting_account.email, body.role, 'roleupdate'):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': f'This account is not authorized to write to the {body.role} role\'s permissions.'
+            'error': f'This account is not authorized to update the {body.role} role\'s permissions.'
         }
 
     for permission in body.remove_permissions:
@@ -249,10 +251,10 @@ def update_role_inheritance(response: Response,
     requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
-    if not is_authorized(requesting_account.email, body.role, 'write'):
+    if not is_authorized(requesting_account.email, body.role, 'roleupdate'):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': f'This account is not authorized to write to the {body.role} role\'s inheritance.'
+            'error': f'This account is not authorized to update the {body.role} role\'s inheritance.'
         }
 
     for inherited_role in body.add_inherited_roles:
