@@ -20,12 +20,12 @@ The payload of the token contains the user's email address, their roles, and a f
 {
     "email": "user@university.edu",
     "roles": ["admin"],
-    "permissions": ["member:read", "member:write"]
+    "permissions": ["member:read", "member:assign"]
 }
 ```
 Every payload also carries an `account_type` of either `user` or `service`, so a service receiving the token can tell whether a person or another service is calling it.
 
-Roles and permissions are managed with [casbin](https://casbin.org/). Each permission is a `resource:action` pair granted to a role (for example, `member:write` lets a role grant or revoke the `member` role on other accounts), and can be changed at any time. Users can be assigned any number of roles, and they inherit every permission granted to each of those roles.
+Roles and permissions are managed with [casbin](https://casbin.org/). Each permission is a `resource:action` pair granted to a role (for example, `member:assign` lets a role grant or revoke the `member` role on other accounts, while `member:roleupdate` lets it change the `member` role's own permissions and inheritance; plain actions like `member:write` never grant any role-management access), and can be changed at any time. Users can be assigned any number of roles, and they inherit every permission granted to each of those roles.
 
 ## Token Expiration & Refresh
 Each auth JWT expires 15 minutes after it's generated. After expiring, the token is useless. To keep using the apps and services, a new token will have to be generated. So the user doesn't have to sign in every 15 minutes, a refresh token is used. Upon signing in, an auth token and refresh token is sent to the client. After the auth token expires, the refresh token can be used to generate another auth token. That refresh token expires 2 days after being generated, and it's replaced every time the auth token is replaced.
