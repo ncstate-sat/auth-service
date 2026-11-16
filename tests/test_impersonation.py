@@ -43,15 +43,17 @@ def impersonation_headers():
     return bearer({'email': TARGET_EMAIL, 'impersonated_by': IMPERSONATOR_EMAIL})
 
 
-def test_impersonate_returns_only_an_access_token(caplog):
+def test_impersonate_returns_an_access_token_and_its_payload(caplog):
     with caplog.at_level(logging.INFO, logger='controllers.impersonation'):
         response = client.post('/impersonate', json={'email': TARGET_EMAIL},
                                headers=bearer({'email': IMPERSONATOR_EMAIL}))
 
     assert response.status_code == 200
-    assert set(response.json()) == {'token'}
+    assert set(response.json()) == {'token', 'payload'}
+    assert response.json()['payload']['impersonated_by'] == IMPERSONATOR_EMAIL
 
     payload = Token.decode_token(response.json()['token'])
+    assert response.json()['payload'].items() <= payload.items()
     assert payload['email'] == TARGET_EMAIL
     assert payload['roles'] == ['member']
     assert payload['permissions'] == ['records:read']

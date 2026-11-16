@@ -31,10 +31,9 @@ def _can_be_impersonated(email):
     return not SERVICE_ACCOUNT_EMAIL_PATTERN.match(email) and not is_root_admin(email)
 
 
-def _impersonation_token(target_email, impersonator_email):
+def _impersonation_payload(target_email, impersonator_email):
     account = Account.find_by_email(target_email)
-    payload = {**account.__dict__, 'account_type': 'user', 'impersonated_by': impersonator_email}
-    return Token.generate_token(payload)
+    return {**account.__dict__, 'account_type': 'user', 'impersonated_by': impersonator_email}
 
 
 @router.post('/impersonate', tags=['Impersonation'])
@@ -62,7 +61,11 @@ def impersonate(response: Response,
         response.status_code = status.HTTP_403_FORBIDDEN
         return {'error': f'{body.email} cannot be impersonated.'}
 
-    token = _impersonation_token(body.email, impersonator_email)
+    payload = _impersonation_payload(body.email, impersonator_email)
+    token = Token.generate_token(payload)
     logger.info('%s impersonated %s', impersonator_email, body.email)
 
-    return {'token': token}
+    return {
+        'token': token,
+        'payload': payload
+    }
