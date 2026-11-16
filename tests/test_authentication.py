@@ -41,6 +41,8 @@ def test_decode_google_token(monkeypatch):
     assert 'refresh_token' in response.json()
     assert 'error' not in response.json()
     assert response.json()['payload']['account_type'] == 'user'
+    assert Token.decode_token(response.json()['token'])['token_type'] == 'access'
+    assert Token.decode_token(response.json()['refresh_token'])['token_type'] == 'refresh'
 
 
 def test_decode_token():
