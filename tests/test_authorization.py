@@ -4,37 +4,29 @@ import os
 from fastapi.testclient import TestClient
 from main import app
 from models.Token import Token
-from util.db import AuthDB
+from util.enforcer import enforcer
 
 client = TestClient(app)
 
-ADMIN_ROLE = {
-    'name': 'admin',
-    'authorizations': {
-        'root': True,
-        '_read': ['admin, member'],
-        '_write': ['admin', 'member']
-    }
-}
-
-MEMBER_ROLE = {
-    'name': 'member',
-    'authorizations': {
-        'can_do_x': True,
-        'can_do_y': True,
-        '_read': [],
-        '_write': []
-    }
-}
-
 ADMIN_ACCOUNT = {
     'email': 'admin@university.edu',
-    'roles': ['Admin']
+    'roles': ['admin'],
+    'permissions': [
+        'admin:read', 'admin:roleupdate', 'admin:assign',
+        'member:read', 'member:roleupdate', 'member:assign'
+    ]
+}
+
+DEV_MANAGER_ACCOUNT = {
+    'email': 'manager@university.edu',
+    'roles': ['dev-manager'],
+    'permissions': []
 }
 
 MEMBER_ACCOUNT = {
     'email': 'member@university.edu',
-    'roles': ['member']
+    'roles': ['member'],
+    'permissions': []
 }
 
 os.environ["JWT_SECRET"] = "TEST_SECRET"
@@ -54,42 +46,183 @@ INVALID_SIGNATURE_JWT = (
 )
 
 
+def mock_enforce_by_role(allowed_roles):
+    """Builds a mock enforce() that allows any act on the given roles."""
+    def _enforce(_sub, obj, _act):
+        return obj in allowed_roles
+    return _enforce
+
+
+def mock_enforce_by_permission(allowed_permissions):
+    """Builds a mock enforce() that allows only the given 'role:act' permissions."""
+    def _enforce(_sub, obj, act):
+        return f'{obj}:{act}' in allowed_permissions
+    return _enforce
+
+
+def test_get_roles(monkeypatch):
+    """
+    It should list all known role names, deduplicated and excluding emails.
+
+    This includes roles that have no direct permissions and only appear as
+    the subject of a grouping policy, i.e. a role that solely inherits from
+    other roles (e.g. 'admin' inheriting from 'clearance-manager' below).
+    """
+    monkeypatch.setattr(enforcer, 'get_policy', lambda: [
+        ['clearance-manager', 'member', 'write'],
+        ['member', 'member', 'read'],
+    ])
+    monkeypatch.setattr(enforcer, 'get_all_roles', lambda: ['member', 'liaison', MEMBER_ACCOUNT['email']])
+    monkeypatch.setattr(enforcer, 'get_grouping_policy', lambda: [
+        ['admin', 'clearance-manager'],
+        ['admin', 'liaison'],
+        [MEMBER_ACCOUNT['email'], 'member'],
+    ])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/roles',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'roles': ['admin', 'clearance-manager', 'liaison', 'member']
+    }
+
+    expired_response = client.get(
+        '/roles',
+        headers={'Authorization': f'Bearer {EXPIRED_JWT}'}
+    )
+    assert expired_response.status_code == 401
+    assert 'roles' not in expired_response.json()
+
+
+def test_get_account_self(monkeypatch):
+    """
+    It should let an account read its own email, roles, and permissions
+    without any authorization check.
+    """
+    def mock_get_implicit_permissions_for_user(email):
+        return [] if email != ADMIN_ACCOUNT['email'] else [
+            ['admin', obj, act] for perm in ADMIN_ACCOUNT['permissions']
+            for obj, act in [perm.split(':')]
+        ]
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', mock_get_implicit_permissions_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        f'/account?email={ADMIN_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['email'] == ADMIN_ACCOUNT['email']
+    assert body['roles'] == ADMIN_ACCOUNT['roles']
+    assert body['inherited_roles'] == []
+    assert set(body['permissions']) == set(ADMIN_ACCOUNT['permissions'])
+
+
+def test_get_account(monkeypatch):
+    """
+    It should get another account's email, roles, and permissions if the
+    requester can read all of that account's roles.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda email: ADMIN_ACCOUNT['roles'] if email == ADMIN_ACCOUNT['email'] else MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user',
+                        lambda email: ADMIN_ACCOUNT['roles'] if email == ADMIN_ACCOUNT['email'] else MEMBER_ACCOUNT['roles'])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        f'/account?email={MEMBER_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'email': MEMBER_ACCOUNT['email'],
+        'roles': MEMBER_ACCOUNT['roles'],
+        'inherited_roles': [],
+        'permissions': []
+    }
+
+
+def test_get_account_inherited_roles(monkeypatch):
+    """
+    It should report roles inherited transitively through the account's
+    directly assigned roles, separately from those roles themselves.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user',
+                        lambda email: MEMBER_ACCOUNT['roles'] + ['guest'])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        f'/account?email={MEMBER_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'email': MEMBER_ACCOUNT['email'],
+        'roles': MEMBER_ACCOUNT['roles'],
+        'inherited_roles': ['guest'],
+        'permissions': []
+    }
+
+
+def test_get_account_unauthorized(monkeypatch):
+    """
+    It should fail to get another account's info without read access to all of its roles.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda email: MEMBER_ACCOUNT['roles'] if email == MEMBER_ACCOUNT['email'] else ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        f'/account?email={ADMIN_ACCOUNT["email"]}',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': f'This account is not authorized to read {ADMIN_ACCOUNT["email"]}\'s authorization(s).'
+    }
+
+
 def test_get_accounts_with_role(monkeypatch):
     """
     It should get all users with a role.
     """
-    def mock_get_account_by_email(*_, **__):
-        return {
-            'email': 'admin@university.edu',
-            'roles': ['admin'],
-            'authorizations': {
-                'root': True,
-                '_read': ['admin', 'member'],
-                '_write': ['admin', 'member']
-            }
-        }
+    def mock_get_roles_for_user(email):
+        return ADMIN_ACCOUNT['roles'] if email == ADMIN_ACCOUNT['email'] else MEMBER_ACCOUNT['roles']
 
-    def mock_get_accounts_by_role(*_, **__):
-        return [
-            {
-                'email': 'member@university.edu',
-                'roles': ['member'],
-                'authorizations': {
-                    'can_do_x': True,
-                    'can_do_y': True,
-                    '_read': [],
-                    '_write': []
-                }
-            }
+    def mock_get_implicit_permissions_for_user(email):
+        return [] if email != ADMIN_ACCOUNT['email'] else [
+            ['admin', obj, act] for perm in ADMIN_ACCOUNT['permissions']
+            for obj, act in [perm.split(':')]
         ]
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
+    def mock_get_users_for_role(role):
+        return [MEMBER_ACCOUNT['email']] if role == 'member' else []
 
-    monkeypatch.setattr(AuthDB,
-                        'get_accounts_by_role',
-                        mock_get_accounts_by_role)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', mock_get_roles_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', mock_get_implicit_permissions_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', mock_get_roles_for_user)
+    monkeypatch.setattr(enforcer, 'get_users_for_role', mock_get_users_for_role)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.get(
@@ -97,14 +230,14 @@ def test_get_accounts_with_role(monkeypatch):
         headers={'Authorization': f'Bearer {token}'}
     )
 
-    expected_accounts = MEMBER_ACCOUNT.copy()
-    expected_accounts.update({
-        'authorizations': MEMBER_ROLE['authorizations']
-    })
-
     assert response.status_code == 200
     assert response.json() == {
-        'accounts': [expected_accounts]
+        'accounts': [{
+            'email': MEMBER_ACCOUNT['email'],
+            'roles': MEMBER_ACCOUNT['roles'],
+            'inherited_roles': [],
+            'permissions': []
+        }]
     }
 
     expired_response = client.get(
@@ -122,53 +255,50 @@ def test_get_accounts_with_role(monkeypatch):
     assert 'accounts' not in invalid_response.json()
 
 
+def test_get_accounts_with_role_excludes_inheriting_roles(monkeypatch):
+    """
+    It should not include other role names in the results, even if those roles
+    have a direct grouping-policy edge into the queried role (i.e. inherit from it).
+    """
+    def mock_get_users_for_role(role):
+        return ['admin', MEMBER_ACCOUNT['email']] if role == 'liaison' else []
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['liaison']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_users_for_role', mock_get_users_for_role)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-accounts?role=liaison',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'accounts': [{
+            'email': MEMBER_ACCOUNT['email'],
+            'roles': MEMBER_ACCOUNT['roles'],
+            'inherited_roles': [],
+            'permissions': []
+        }]
+    }
+
+
 def test_get_account_with_role_unauthorized(monkeypatch):
     """
     It should fail to get users with a certain role if the requesting account does not have authorization.
     """
-    def mock_get_account_by_email(*_, **__):
-        return {
-            'email': 'member@university.edu',
-            'roles': ['member'],
-            'authorizations': {
-                'can_do_x': True,
-                'can_do_y': True,
-                '_read': [],
-                '_write': []
-            }
-        }
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
 
-    def mock_get_accounts_by_role(*_, **__):
-        return [
-            {
-                'email': 'admin@university.edu',
-                'roles': ['admin'],
-                'authorizations': {
-                    'root': True,
-                    '_read': ['admin', 'member'],
-                    '_write': ['admin', 'member']
-                }
-            }
-        ]
-
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'get_accounts_by_role',
-                        mock_get_accounts_by_role)
-
-    token = Token.generate_token(ADMIN_ACCOUNT)
+    token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.get(
         '/role-accounts?role=admin',
         headers={'Authorization': f'Bearer {token}'}
     )
-
-    expected_accounts = MEMBER_ACCOUNT.copy()
-    expected_accounts.update({
-        'authorizations': MEMBER_ROLE['authorizations']
-    })
 
     assert response.status_code == 400
     assert response.json() == {
@@ -180,39 +310,18 @@ def test_add_role(monkeypatch):
     """
     It should be able to add a role to an account.
     """
-    def mock_get_account_by_email(email):
-        if email == 'member@university.edu':
-            return {
-                'email': 'member@university.edu',
-                'roles': ['member'],
-                'authorizations': {
-                    'can_do_x': True,
-                    'can_do_y': True,
-                    '_read': [],
-                    '_write': []
-                }
-            }
-        else:
-            return {
-                'email': 'admin@university.edu',
-                'roles': ['admin'],
-                'authorizations': {
-                    'root': True,
-                    '_read': ['admin, member'],
-                    '_write': ['admin', 'member']
-                }
-            }
+    granted_roles = []
 
-    def mock_update_account(account_data):
-        return account_data
+    def mock_get_roles_for_user(email):
+        if email == MEMBER_ACCOUNT['email']:
+            return MEMBER_ACCOUNT['roles'] + granted_roles
+        return ADMIN_ACCOUNT['roles']
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin', 'member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', mock_get_roles_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *_: granted_roles.append('admin'))
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', lambda *_: None)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -224,12 +333,12 @@ def test_add_role(monkeypatch):
         }
     )
 
-    expected_account_state = MEMBER_ACCOUNT.copy()
-    expected_account_state['roles'].append('admin')
-
     assert response.status_code == 200
     assert response.json() == {
-        'account': expected_account_state
+        'account': {
+            'email': MEMBER_ACCOUNT['email'],
+            'roles': ['member', 'admin']
+        }
     }
 
     expired_response = client.put(
@@ -259,39 +368,9 @@ def test_add_role_unauthorized(monkeypatch):
     """
     It should fail to add roles to an account if the requesting account does not have authorization.
     """
-    def mock_get_account_by_email(email):
-        if email == 'member@university.edu':
-            return {
-                'email': 'member@university.edu',
-                'roles': ['member'],
-                'authorizations': {
-                    'can_do_x': True,
-                    'can_do_y': True,
-                    '_read': [],
-                    '_write': []
-                }
-            }
-        else:
-            return {
-                'email': 'admin@university.edu',
-                'roles': ['admin'],
-                'authorizations': {
-                    'root': True,
-                    '_read': ['admin, member'],
-                    '_write': ['admin', 'member']
-                }
-            }
-
-    def mock_update_account(account_data):
-        return account_data
-
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(
@@ -303,12 +382,9 @@ def test_add_role_unauthorized(monkeypatch):
         }
     )
 
-    expected_account_state = MEMBER_ACCOUNT.copy()
-    expected_account_state['roles'].append('admin')
-
     assert response.status_code == 400
     assert response.json() == {
-        'error': 'This account is not authorized to write to this user\'s authorization(s).'
+        'error': 'This account is not authorized to assign or revoke these role(s).'
     }
 
 
@@ -316,39 +392,21 @@ def test_remove_role(monkeypatch):
     """
     It should be able to remove multiple roles from an account.
     """
-    def mock_get_account_by_email(email):
-        if email == 'member@university.edu':
-            return {
-                'email': 'member@university.edu',
-                'roles': ['member'],
-                'authorizations': {
-                    'can_do_x': True,
-                    'can_do_y': True,
-                    '_read': [],
-                    '_write': []
-                }
-            }
-        else:
-            return {
-                'email': 'admin@university.edu',
-                'roles': ['admin'],
-                'authorizations': {
-                    'root': True,
-                    '_read': ['admin, member'],
-                    '_write': ['admin', 'member']
-                }
-            }
+    remaining_roles = ['member']
 
-    def mock_update_account(account_data):
-        return account_data
+    def mock_get_roles_for_user(email):
+        if email == MEMBER_ACCOUNT['email']:
+            return remaining_roles
+        return ADMIN_ACCOUNT['roles']
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
+    def mock_remove_grouping_policy(_email, role):
+        remaining_roles.remove(role)
 
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin', 'member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', mock_get_roles_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *_: None)
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', mock_remove_grouping_policy)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -360,14 +418,12 @@ def test_remove_role(monkeypatch):
         }
     )
 
-    expected_account_state = {
-        'email': 'member@university.edu',
-        'roles': []
-    }
-
     assert response.status_code == 200
     assert response.json() == {
-        'account': expected_account_state
+        'account': {
+            'email': MEMBER_ACCOUNT['email'],
+            'roles': []
+        }
     }
 
 
@@ -375,39 +431,9 @@ def test_remove_role_unauthorized(monkeypatch):
     """
     It should fail to remove roles if the requesting account does not have permission.
     """
-    def mock_get_account_by_email(email):
-        if email == 'member@university.edu':
-            return {
-                'email': 'member@university.edu',
-                'roles': ['member'],
-                'authorizations': {
-                    'can_do_x': True,
-                    'can_do_y': True,
-                    '_read': [],
-                    '_write': []
-                }
-            }
-        else:
-            return {
-                'email': 'admin@university.edu',
-                'roles': ['admin'],
-                'authorizations': {
-                    'root': True,
-                    '_read': ['admin, member'],
-                    '_write': ['admin', 'member']
-                }
-            }
-
-    def mock_update_account(account_data):
-        return account_data
-
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(
@@ -421,7 +447,7 @@ def test_remove_role_unauthorized(monkeypatch):
 
     assert response.status_code == 400
     assert response.json() == {
-        'error': 'This account is not authorized to write to this user\'s authorization(s).'
+        'error': 'This account is not authorized to assign or revoke these role(s).'
     }
 
 
@@ -429,39 +455,24 @@ def test_add_and_remove_roles(monkeypatch):
     """
     It should be able to add and remove roles for an account.
     """
-    def mock_get_account_by_email(email):
-        if email == 'member@university.edu':
-            return {
-                'email': 'member@university.edu',
-                'roles': ['member'],
-                'authorizations': {
-                    'can_do_x': True,
-                    'can_do_y': True,
-                    '_read': [],
-                    '_write': []
-                }
-            }
-        else:
-            return {
-                'email': 'admin@university.edu',
-                'roles': ['admin'],
-                'authorizations': {
-                    'root': True,
-                    '_read': ['admin, member'],
-                    '_write': ['admin', 'member']
-                }
-            }
+    account_roles = ['member']
 
-    def mock_update_account(account_data):
-        return account_data
+    def mock_get_roles_for_user(email):
+        if email == MEMBER_ACCOUNT['email']:
+            return account_roles
+        return ADMIN_ACCOUNT['roles']
 
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
+    def mock_add_grouping_policy(_email, role):
+        account_roles.append(role)
 
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    def mock_remove_grouping_policy(_email, role):
+        account_roles.remove(role)
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin', 'member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', mock_get_roles_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', mock_add_grouping_policy)
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', mock_remove_grouping_policy)
 
     token = Token.generate_token(ADMIN_ACCOUNT)
     response = client.put(
@@ -474,14 +485,12 @@ def test_add_and_remove_roles(monkeypatch):
         }
     )
 
-    expected_account_state = {
-        'email': 'member@university.edu',
-        'roles': ['admin']
-    }
-
     assert response.status_code == 200
     assert response.json() == {
-        'account': expected_account_state
+        'account': {
+            'email': MEMBER_ACCOUNT['email'],
+            'roles': ['admin']
+        }
     }
 
 
@@ -489,39 +498,9 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
     """
     It should be able to add and remove roles for an account.
     """
-    def mock_get_account_by_email(email):
-        if email == 'member@university.edu':
-            return {
-                'email': 'member@university.edu',
-                'roles': ['member'],
-                'authorizations': {
-                    'can_do_x': True,
-                    'can_do_y': True,
-                    '_read': [],
-                    '_write': []
-                }
-            }
-        else:
-            return {
-                'email': 'admin@university.edu',
-                'roles': ['admin'],
-                'authorizations': {
-                    'root': True,
-                    '_read': ['admin, member'],
-                    '_write': ['admin', 'member']
-                }
-            }
-
-    def mock_update_account(account_data):
-        return account_data
-
-    monkeypatch.setattr(AuthDB,
-                        'get_account_by_email',
-                        mock_get_account_by_email)
-
-    monkeypatch.setattr(AuthDB,
-                        'update_account',
-                        mock_update_account)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
 
     token = Token.generate_token(MEMBER_ACCOUNT)
     response = client.put(
@@ -536,5 +515,543 @@ def test_add_and_remove_roles_unauthorized(monkeypatch):
 
     assert response.status_code == 400
     assert response.json() == {
-        'error': 'This account is not authorized to write to this user\'s authorization(s).'
+        'error': 'This account is not authorized to assign or revoke these role(s).'
+    }
+
+
+def test_assign_permission_allows_assigning_role(monkeypatch):
+    """
+    It should let an account with only assign on a role grant and revoke that role.
+    """
+    account_roles = ['member']
+
+    def mock_get_roles_for_user(email):
+        if email == MEMBER_ACCOUNT['email']:
+            return account_roles
+        return DEV_MANAGER_ACCOUNT['roles']
+
+    def mock_add_grouping_policy(_email, role):
+        account_roles.append(role)
+
+    def mock_remove_grouping_policy(_email, role):
+        account_roles.remove(role)
+
+    assign_only = mock_enforce_by_permission(['dev:assign', 'member:assign'])
+    monkeypatch.setattr(enforcer, 'enforce', assign_only)
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', mock_get_roles_for_user)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', mock_add_grouping_policy)
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', mock_remove_grouping_policy)
+
+    token = Token.generate_token(DEV_MANAGER_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'email': MEMBER_ACCOUNT['email'],
+            'add_roles': ['dev'],
+            'remove_roles': ['member']
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'account': {
+            'email': MEMBER_ACCOUNT['email'],
+            'roles': ['dev']
+        }
+    }
+
+
+def test_write_permission_does_not_allow_assigning_role(monkeypatch):
+    """
+    It should not let write on a role stand in for assign when granting that role.
+    """
+    read_and_write_only = mock_enforce_by_permission(['dev:read', 'dev:write'])
+    monkeypatch.setattr(enforcer, 'enforce', read_and_write_only)
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-account-roles',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'email': MEMBER_ACCOUNT['email'],
+            'add_roles': ['dev']
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to assign or revoke these role(s).'
+    }
+
+
+def test_assign_permission_does_not_allow_changing_role(monkeypatch):
+    """
+    It should not let assign on a role stand in for write when changing that
+    role's permissions or inheritance.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_permission(['dev:assign']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: DEV_MANAGER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(DEV_MANAGER_ACCOUNT)
+    permissions_response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'dev',
+            'add_permissions': [{'obj': 'admin', 'act': 'write'}]
+        }
+    )
+    inheritance_response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'dev',
+            'add_inherited_roles': ['admin']
+        }
+    )
+
+    assert permissions_response.status_code == 400
+    assert permissions_response.json() == {
+        'error': 'This account is not authorized to update the dev role\'s permissions.'
+    }
+    assert inheritance_response.status_code == 400
+    assert inheritance_response.json() == {
+        'error': 'This account is not authorized to update the dev role\'s inheritance.'
+    }
+
+
+def test_write_permission_does_not_allow_changing_role(monkeypatch):
+    """
+    It should not let write on a resource create or change a role of the same
+    name, through either its permissions or its inheritance.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_permission(['data:write']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    permissions_response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_permissions': [{'obj': 'data', 'act': 'read'}]
+        }
+    )
+    inheritance_response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_inherited_roles': ['member']
+        }
+    )
+
+    assert permissions_response.status_code == 400
+    assert permissions_response.json() == {
+        'error': 'This account is not authorized to update the data role\'s permissions.'
+    }
+    assert inheritance_response.status_code == 400
+    assert inheritance_response.json() == {
+        'error': 'This account is not authorized to update the data role\'s inheritance.'
+    }
+
+
+def test_roleupdate_permission_allows_changing_role(monkeypatch):
+    """
+    It should let roleupdate on a role change that role's permissions and inheritance.
+    """
+    role_policies = []
+    inherited_roles = []
+
+    def mock_add_policy(role, obj, act):
+        role_policies.append([role, obj, act])
+
+    def mock_add_grouping_policy(_role, inherited_role):
+        inherited_roles.append(inherited_role)
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_permission(['data:roleupdate']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda name: inherited_roles)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda name: [])
+    monkeypatch.setattr(enforcer, 'add_policy', mock_add_policy)
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', mock_add_grouping_policy)
+    monkeypatch.setattr(enforcer, 'get_filtered_policy',
+                        lambda _index, role: [p for p in role_policies if p[0] == role])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    permissions_response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_permissions': [{'obj': 'data', 'act': 'read'}]
+        }
+    )
+    inheritance_response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'data',
+            'add_inherited_roles': ['member']
+        }
+    )
+
+    assert permissions_response.status_code == 200
+    assert permissions_response.json() == {
+        'permissions': [{'obj': 'data', 'act': 'read'}]
+    }
+    assert inheritance_response.status_code == 200
+    assert inheritance_response.json() == {
+        'inherited_roles': ['member']
+    }
+
+
+def test_get_role_permissions(monkeypatch):
+    """
+    It should get the permissions granted to a role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_filtered_policy', lambda _index, role: [[role, 'can_do_x', 'read']])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-permissions?role=member',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'permissions': [{'obj': 'can_do_x', 'act': 'read'}]
+    }
+
+
+def test_get_role_permissions_unauthorized(monkeypatch):
+    """
+    It should fail to get a role's permissions without read access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        '/role-permissions?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to read admin authorizations.'
+    }
+
+
+def test_update_role_permissions(monkeypatch):
+    """
+    It should be able to add and remove permissions granted to a role.
+    """
+    role_policies = [['member', 'can_do_x', 'read']]
+
+    def mock_add_policy(role, obj, act):
+        role_policies.append([role, obj, act])
+
+    def mock_remove_policy(role, obj, act):
+        role_policies.remove([role, obj, act])
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin', 'member']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_policy', mock_add_policy)
+    monkeypatch.setattr(enforcer, 'remove_policy', mock_remove_policy)
+    monkeypatch.setattr(enforcer, 'get_filtered_policy',
+                        lambda _index, role: [p for p in role_policies if p[0] == role])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'member',
+            'add_permissions': [{'obj': 'can_do_y', 'act': 'write'}],
+            'remove_permissions': [{'obj': 'can_do_x', 'act': 'read'}]
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'permissions': [{'obj': 'can_do_y', 'act': 'write'}]
+    }
+
+
+def test_update_role_permissions_unauthorized(monkeypatch):
+    """
+    It should fail to update a role's permissions without write access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_permissions': [{'obj': 'root', 'act': 'write'}]
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to update the admin role\'s permissions.'
+    }
+
+
+def test_get_role_inheritance(monkeypatch):
+    """
+    It should get a role's inherited roles and effective (inherited) permissions.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else ['liaison'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user',
+                        lambda name: [] if name != 'admin' else [['admin', 'clearance', 'read']])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-inheritance?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': ['liaison'],
+        'effective_permissions': [{'obj': 'clearance', 'act': 'read'}]
+    }
+
+
+def test_get_role_inheritance_deduplicates_permissions(monkeypatch):
+    """
+    It should not list the same (obj, act) permission twice, even if it is
+    granted by more than one inherited role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user',
+                        lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else ['liaison', 'student'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user',
+                        lambda name: [] if name != 'admin' else [
+                            ['liaison', 'clearance', 'read'],
+                            ['student', 'clearance', 'read']
+                        ])
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.get(
+        '/role-inheritance?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': ['liaison', 'student'],
+        'effective_permissions': [{'obj': 'clearance', 'act': 'read'}]
+    }
+
+
+def test_get_role_inheritance_unauthorized(monkeypatch):
+    """
+    It should fail to get a role's inheritance without read access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.get(
+        '/role-inheritance?role=admin',
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to read admin authorizations.'
+    }
+
+
+def test_update_role_inheritance_add(monkeypatch):
+    """
+    It should be able to add inherited roles to a role.
+    """
+    inherited_roles = []
+
+    def mock_add_grouping_policy(_role, inherited_role):
+        inherited_roles.append(inherited_role)
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else inherited_roles)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda _name: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', mock_add_grouping_policy)
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', lambda *_: None)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['liaison', 'student']
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': ['liaison', 'student']
+    }
+
+
+def test_update_role_inheritance_remove(monkeypatch):
+    """
+    It should be able to remove inherited roles from a role.
+    """
+    inherited_roles = ['liaison']
+
+    def mock_remove_grouping_policy(_role, inherited_role):
+        inherited_roles.remove(inherited_role)
+
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda name: ADMIN_ACCOUNT['roles'] if name == ADMIN_ACCOUNT['email'] else inherited_roles)
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda _name: [])
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *_: None)
+    monkeypatch.setattr(enforcer, 'remove_grouping_policy', mock_remove_grouping_policy)
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'remove_inherited_roles': ['liaison']
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inherited_roles': []
+    }
+
+
+def test_update_role_inheritance_unauthorized(monkeypatch):
+    """
+    It should fail to update a role's inheritance without write access to that role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: MEMBER_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+
+    token = Token.generate_token(MEMBER_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['liaison']
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'This account is not authorized to update the admin role\'s inheritance.'
+    }
+
+
+def test_update_role_inheritance_rejects_self_cycle(monkeypatch):
+    """
+    It should reject a role being added as its own inherited role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda _name: [])
+    add_grouping_policy_calls = []
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *args: add_grouping_policy_calls.append(args))
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['admin']
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'Cannot add admin as a inherited role of admin: this would create a cycle.'
+    }
+    assert add_grouping_policy_calls == []
+
+
+def test_update_role_inheritance_rejects_transitive_cycle(monkeypatch):
+    """
+    It should reject adding a inherited role that already (transitively) inherits this role.
+    """
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role(['admin']))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: ADMIN_ACCOUNT['roles'])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_roles_for_user', lambda name: ['admin'] if name == 'liaison' else [])
+    add_grouping_policy_calls = []
+    monkeypatch.setattr(enforcer, 'add_grouping_policy', lambda *args: add_grouping_policy_calls.append(args))
+
+    token = Token.generate_token(ADMIN_ACCOUNT)
+    response = client.put(
+        '/update-role-inheritance',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_inherited_roles': ['liaison']
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        'error': 'Cannot add liaison as a inherited role of admin: this would create a cycle.'
+    }
+    assert add_grouping_policy_calls == []
+
+
+def test_root_admin_email_bypasses_authorization(monkeypatch):
+    """
+    ROOT_ADMIN_EMAIL should be authorized even when casbin would otherwise deny,
+    so the first role/permissions can be bootstrapped on a fresh system.
+    """
+    root_email = 'root@university.edu'
+    monkeypatch.setenv('ROOT_ADMIN_EMAIL', root_email)
+    monkeypatch.setattr(enforcer, 'enforce', mock_enforce_by_role([]))
+    monkeypatch.setattr(enforcer, 'get_roles_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'get_implicit_permissions_for_user', lambda email: [])
+    monkeypatch.setattr(enforcer, 'add_policy', lambda *_: None)
+    monkeypatch.setattr(enforcer, 'get_filtered_policy', lambda *_: [])
+
+    token = Token.generate_token({'email': root_email, 'roles': [], 'permissions': []})
+    response = client.put(
+        '/update-role-permissions',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'role': 'admin',
+            'add_permissions': [{'obj': 'admin', 'act': 'write'}]
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'permissions': []
     }

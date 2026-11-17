@@ -1,5 +1,40 @@
-__pycache__
-.pytest_cache
-.env
+# VCS / editor
 .git
 .gitignore
+.github
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage
+htmlcov
+*.egg-info
+build
+dist
+venv
+.venv
+
+# Secrets / local env
+.env
+.envrc
+sample_envrc
+
+# Dev-only dependency lockfile (only requirements/base is used by the image)
+requirements/dev
+
+# Not needed at runtime
+tests
+demo-website
+k8s
+kustomization.yml
+README.md
+Makefile
+pyproject.toml
+
+# Docker
+Dockerfile
+.dockerignore
