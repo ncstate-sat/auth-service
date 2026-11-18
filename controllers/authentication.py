@@ -96,6 +96,12 @@ def refresh_token(response: Response, body: TokenRequestBody):
     """
     payload = Token.decode_token(body.token)
 
+    if not Token.is_refresh(payload):
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {
+            'error': 'Only refresh tokens can be used to refresh a session.'
+        }
+
     if SERVICE_ACCOUNT_EMAIL_PATTERN.match(payload['email']):
         response.status_code = status.HTTP_403_FORBIDDEN
         return {

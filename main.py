@@ -2,10 +2,15 @@
 The starting point for the auth service.
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from controllers.authentication import router as authentication_router
 from controllers.authorization import router as authorization_router
+from controllers.impersonation import router as impersonation_router
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
 
 DESCRIPTION = """
@@ -28,12 +33,15 @@ Every payload also carries an `account_type` of either `user` or `service`, so a
 Roles and permissions are managed with [casbin](https://casbin.org/). Each permission is a `resource:action` pair granted to a role (for example, `member:assign` lets a role grant or revoke the `member` role on other accounts, while `member:roleupdate` lets it change the `member` role's own permissions and inheritance; plain actions like `member:write` never grant any role-management access), and can be changed at any time. Users can be assigned any number of roles, and they inherit every permission granted to each of those roles.
 
 ## Token Expiration & Refresh
-Each auth JWT expires 15 minutes after it's generated. After expiring, the token is useless. To keep using the apps and services, a new token will have to be generated. So the user doesn't have to sign in every 15 minutes, a refresh token is used. Upon signing in, an auth token and refresh token is sent to the client. After the auth token expires, the refresh token can be used to generate another auth token. That refresh token expires 2 days after being generated, and it's replaced every time the auth token is replaced.
+Each auth JWT expires 15 minutes after it's generated. After expiring, the token is useless. To keep using the apps and services, a new token will have to be generated. So the user doesn't have to sign in every 15 minutes, a refresh token is used. Upon signing in, an auth token and refresh token is sent to the client. After the auth token expires, the refresh token can be used to generate another auth token. That refresh token expires 2 days after being generated, and it's replaced every time the auth token is replaced. Every token carries a `token_type` of `access` or `refresh`. Only refresh tokens work at `/refresh-token`, and only access tokens are accepted as `Authorization` bearer tokens.
 
 ## Service Accounts
 Backend services authenticate as Google Cloud service accounts. A service mints a Google-signed ID token for its own service account (for example, with `google.oauth2.id_token.fetch_id_token`) and exchanges it at `/service-account/google-sign-in` for an auth token, the same way a browser app exchanges a user's credential at `/google-sign-in`.
 
 Service accounts get roles through `/update-account-roles` like any other account. Service accounts don't receive refresh tokens; when the auth token expires, they mint a new ID token and sign in again.
+
+## Impersonation
+Accounts with the reserved `auth:impersonate` permission can call `/impersonate` to get an auth token for any user (except service accounts and the root admin). The token carries the user's payload plus an `impersonated_by` claim holding the impersonator's email, so services can tell the session apart. No refresh token is issued, and every use is logged. Only the root admin can grant or revoke `auth:*` permissions, and `auth` can't be used as a role name.
 """
 
 app = FastAPI(
@@ -59,3 +67,4 @@ def welcome():
 
 app.include_router(authentication_router)
 app.include_router(authorization_router)
+app.include_router(impersonation_router)

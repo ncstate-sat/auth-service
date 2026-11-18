@@ -85,6 +85,19 @@ Service accounts work like people: any service account can sign in, and what it 
 
 To cut off a service account, remove its roles. Auth tokens it already holds keep their old roles until they expire, within 15 minutes.
 
+## Impersonation
+
+`POST /impersonate` with `{"email": "<user email>"}` returns an auth token for that user, so support staff can see exactly what they see in other services.
+
+- **Permission.** The requester needs `auth:impersonate`. `auth` is a resource reserved by this service: it can't be used as a role name. Anyone with `roleupdate` on a role can grant it `auth:*` permissions (e.g. `PUT /update-role-permissions` adding `{"obj": "auth", "act": "impersonate"}` to a `support` role).
+- **Access token only.** The response is `{"token": "...", "payload": {...}}`, like the sign-in endpoints. No refresh token is issued, so the session ends when the token expires after 15 minutes.
+- **Marked tokens.** The payload is the target user's, plus `impersonated_by` with the impersonator's email. Downstream services can use it to show a banner or audit actions.
+- **Not usable here.** This service rejects impersonation tokens on every endpoint except `/login`, including `/impersonate` and `/refresh-token`.
+- **Protected targets.** Service accounts and `ROOT_ADMIN_EMAIL` can't be impersonated.
+- **Logged.** Each use is logged at INFO (`<impersonator> impersonated <user>`), and each denied attempt at WARNING.
+
+Every token carries a `token_type`: `access` for auth tokens (including impersonation tokens) and `refresh` for refresh tokens. `/refresh-token` accepts only refresh tokens, and this service accepts only access tokens in the `Authorization` header. Other services should also check for `token_type: access`. Tokens issued before this change don't have the claim, so those users sign in again once.
+
 ## Running on your Local Machine
 
 Install dependencies.
