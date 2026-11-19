@@ -6,7 +6,8 @@ from main import app
 
 client = TestClient(app)
 
-SECURITY_LIAISON = {'role': 'security-liaison', 'alias': 'Security Liaison', 'tags': ['User']}
+SECURITY_LIAISON = {'role': 'security-liaison', 'alias': 'Security Liaison', 'tags': ['User'],
+                    'description': 'Coordinates security reviews'}
 
 
 @pytest.fixture(autouse=True)
@@ -33,8 +34,8 @@ def test_get_all_returns_metadata_sorted_by_role():
     response = client.get('/role-metadata')
 
     assert response.json() == {'role_metadata': [
-        {'role': 'admin', 'alias': None, 'tags': ['User']},
-        {'role': 'viewer', 'alias': 'Viewer', 'tags': []},
+        {'role': 'admin', 'alias': None, 'tags': ['User'], 'description': None},
+        {'role': 'viewer', 'alias': 'Viewer', 'tags': [], 'description': None},
     ]}
 
 
@@ -64,14 +65,39 @@ def test_post_accepts_only_an_alias():
     response = save({'role': 'viewer', 'alias': 'Viewer'})
 
     assert response.status_code == 201
-    assert response.json() == {'role': 'viewer', 'alias': 'Viewer', 'tags': []}
+    assert response.json() == {
+        'role': 'viewer', 'alias': 'Viewer', 'tags': [], 'description': None}
 
 
 def test_post_accepts_only_tags():
     response = save({'role': 'beta-search', 'tags': ['Feature']})
 
     assert response.status_code == 201
-    assert response.json() == {'role': 'beta-search', 'alias': None, 'tags': ['Feature']}
+    assert response.json() == {
+        'role': 'beta-search', 'alias': None, 'tags': ['Feature'], 'description': None}
+
+
+def test_post_accepts_only_a_description():
+    response = save({'role': 'viewer', 'description': 'Read-only access'})
+
+    assert response.status_code == 201
+    assert response.json() == {
+        'role': 'viewer', 'alias': None, 'tags': [], 'description': 'Read-only access'}
+
+
+def test_post_trims_description():
+    response = save({'role': 'viewer', 'description': '  Read-only access '})
+
+    assert response.json()['description'] == 'Read-only access'
+
+
+def test_post_with_null_description_clears_it():
+    save({'role': 'viewer', 'alias': 'Viewer', 'description': 'Read-only access'})
+
+    response = save({'role': 'viewer', 'description': None})
+
+    assert response.json() == {
+        'role': 'viewer', 'alias': 'Viewer', 'tags': [], 'description': None}
 
 
 def test_post_accepts_several_tags():
@@ -92,7 +118,8 @@ def test_post_on_existing_role_updates_only_sent_fields():
     response = save({'role': 'viewer', 'tags': ['Feature']})
 
     assert response.status_code == 200
-    assert response.json() == {'role': 'viewer', 'alias': 'Viewer', 'tags': ['Feature']}
+    assert response.json() == {
+        'role': 'viewer', 'alias': 'Viewer', 'tags': ['Feature'], 'description': None}
 
 
 def test_post_with_null_clears_that_field():
@@ -101,7 +128,8 @@ def test_post_with_null_clears_that_field():
     response = save({'role': 'viewer', 'alias': None})
 
     assert response.status_code == 200
-    assert response.json() == {'role': 'viewer', 'alias': None, 'tags': ['User']}
+    assert response.json() == {
+        'role': 'viewer', 'alias': None, 'tags': ['User'], 'description': None}
 
 
 @pytest.mark.parametrize('cleared_tags', [None, []])
@@ -110,7 +138,8 @@ def test_post_with_null_or_empty_tags_clears_them(cleared_tags):
 
     response = save({'role': 'viewer', 'tags': cleared_tags})
 
-    assert response.json() == {'role': 'viewer', 'alias': 'Viewer', 'tags': []}
+    assert response.json() == {
+        'role': 'viewer', 'alias': 'Viewer', 'tags': [], 'description': None}
 
 
 def test_post_rejects_unregistered_tags():
@@ -182,7 +211,8 @@ def test_post_allows_a_role_to_keep_its_own_alias():
 def test_post_trims_role_and_alias():
     response = save({'role': '  viewer ', 'alias': '  Viewer  '})
 
-    assert response.json() == {'role': 'viewer', 'alias': 'Viewer', 'tags': []}
+    assert response.json() == {
+        'role': 'viewer', 'alias': 'Viewer', 'tags': [], 'description': None}
 
 
 @pytest.mark.parametrize('body', [
@@ -190,6 +220,7 @@ def test_post_trims_role_and_alias():
     {'role': 'viewer', 'tags': 'User'},
     {'role': 'viewer', 'tags': ['User', '  ']},
     {'role': 'viewer', 'alias': '   '},
+    {'role': 'viewer', 'description': '   '},
     {'role': '   ', 'alias': 'Viewer'},
     {'role': 'person@university.edu', 'alias': 'Person'},
     {'alias': 'Viewer'},
@@ -232,6 +263,7 @@ def test_endpoints_do_not_touch_casbin(monkeypatch):
     client.get('/role-metadata/viewer')
     client.delete('/role-metadata/viewer')
     client.get('/role-tags')
+    client.patch('/role-tags/Temporary', json={'description': 'Short-lived'})
     client.delete('/role-tags/Temporary')
 
 

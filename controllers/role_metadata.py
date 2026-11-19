@@ -1,13 +1,13 @@
-"""Controller functions and routes for role metadata (alias and tags) CRUD."""
+"""Controller functions and routes for role metadata (alias, tags, and description) CRUD."""
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from models.Account import EMAIL_PATTERN
 from models.RoleMetadata import DuplicateAliasError, RoleMetadata, UnknownTagError
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ValidationInfo, field_validator, model_validator
 
 router = APIRouter(prefix='/role-metadata', tags=['Role Metadata'])
 
-EDITABLE_FIELDS = {'alias', 'tags'}
+EDITABLE_FIELDS = {'alias', 'tags', 'description'}
 
 
 class RoleMetadataResponse(BaseModel):
@@ -15,6 +15,7 @@ class RoleMetadataResponse(BaseModel):
     role: str
     alias: str | None = None
     tags: list[str] = []
+    description: str | None = None
 
 
 class RoleMetadataListResponse(BaseModel):
@@ -31,6 +32,7 @@ class SaveRoleMetadataRequestBody(BaseModel):
     role: str
     alias: str | None = None
     tags: list[str] | None = None
+    description: str | None = None
 
     @field_validator('role')
     @classmethod
@@ -42,14 +44,14 @@ class SaveRoleMetadataRequestBody(BaseModel):
             raise ValueError('role must be a role name, not an email address')
         return value
 
-    @field_validator('alias')
+    @field_validator('alias', 'description')
     @classmethod
-    def validate_alias(cls, value):
+    def validate_clearable_text(cls, value, info: ValidationInfo):
         if value is None:
             return value
         value = value.strip()
         if not value:
-            raise ValueError('alias must not be empty; send null to clear it')
+            raise ValueError(f'{info.field_name} must not be empty; send null to clear it')
         return value
 
     @field_validator('tags')
@@ -65,11 +67,11 @@ class SaveRoleMetadataRequestBody(BaseModel):
     @model_validator(mode='after')
     def require_a_change(self):
         if not self.metadata_changes():
-            raise ValueError('provide an alias, tags, or both')
+            raise ValueError('provide at least one of alias, tags, or description')
         return self
 
     def metadata_changes(self):
-        """The alias/tags values the request actually sent, including nulls."""
+        """The alias, tags, and description values the request actually sent, including nulls."""
         return {field: getattr(self, field) for field in self.model_fields_set & EDITABLE_FIELDS}
 
 

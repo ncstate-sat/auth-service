@@ -4,7 +4,7 @@ from models.RoleTag import RoleTag
 from pymongo.errors import DuplicateKeyError
 from util.database import database
 
-PUBLIC_FIELDS = {'_id': False, 'role': True, 'alias': True, 'tags': True}
+PUBLIC_FIELDS = {'_id': False, 'role': True, 'alias': True, 'tags': True, 'description': True}
 
 
 class DuplicateAliasError(Exception):
@@ -28,7 +28,7 @@ class UnknownTagError(Exception):
 
 
 class RoleMetadata:
-    """The RoleMetadata model handles CRUD for a role's alias and tags.
+    """The RoleMetadata model handles CRUD for a role's alias, tags, and description.
 
     A role does not need metadata to exist, and metadata does not need the
     role to exist in casbin.
@@ -72,9 +72,9 @@ class RoleMetadata:
     def save(cls, role, changes):
         """Creates or updates a role's metadata and returns (metadata, was_created).
 
-        changes maps 'alias' and/or 'tags' to a new value; None clears that field
-        and a field left out of changes keeps its current value. Tags must
-        already be registered as RoleTags.
+        changes maps any of 'alias', 'tags', and 'description' to a new value;
+        None clears that field and a field left out of changes keeps its current
+        value. Tags must already be registered as RoleTags.
         """
         if changes.get('alias') is not None:
             cls._reject_alias_used_by_other_role(role, changes['alias'])
@@ -114,22 +114,9 @@ def _alias_key(alias):
 
 
 def _build_update(changes):
-    fields_to_set = {}
-    fields_to_unset = {}
-
-    if 'alias' in changes:
-        alias = changes['alias']
-        if alias is None:
-            fields_to_unset.update({'alias': '', 'alias_key': ''})
-        else:
-            fields_to_set.update({'alias': alias, 'alias_key': _alias_key(alias)})
-
-    if 'tags' in changes:
-        tags = changes['tags']
-        if tags:
-            fields_to_set['tags'] = list(dict.fromkeys(tags))
-        else:
-            fields_to_unset['tags'] = ''
+    stored_fields = _stored_fields_for(changes)
+    fields_to_set = {field: value for field, value in stored_fields.items() if value is not None}
+    fields_to_unset = {field: '' for field, value in stored_fields.items() if value is None}
 
     update = {}
     if fields_to_set:
@@ -139,5 +126,20 @@ def _build_update(changes):
     return update
 
 
+def _stored_fields_for(changes):
+    """Maps the requested changes to the document fields they set, with None meaning unset."""
+    stored_fields = {}
+    if 'alias' in changes:
+        alias = changes['alias']
+        stored_fields['alias'] = alias
+        stored_fields['alias_key'] = None if alias is None else _alias_key(alias)
+    if 'tags' in changes:
+        tags = changes['tags']
+        stored_fields['tags'] = list(dict.fromkeys(tags)) if tags else None
+    if 'description' in changes:
+        stored_fields['description'] = changes['description']
+    return stored_fields
+
+
 def _with_missing_fields(document):
-    return {'alias': None, 'tags': [], **document}
+    return {'alias': None, 'tags': [], 'description': None, **document}
