@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "auth-service"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
     "fastapi>=0.139.0,<1.0.0",
     "uvicorn>=0.51.0,<1.0.0",

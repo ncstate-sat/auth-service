@@ -49,7 +49,7 @@ Roles and permissions are managed with [casbin](https://casbin.org/), and every 
 
 1. Set `ROOT_ADMIN_EMAIL` to your own email address in the environment.
 2. Sign in as that email through the normal authentication flow (`/google-sign-in`).
-3. Using the auth token (from step 2 in the demo website), call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `write` access to itself and to any other roles it should manage.
+3. Using the auth token (from step 2 in the demo website), call `PUT /update-role-permissions` to define an initial role, e.g. grant an `admin` role `roleupdate` and `assign` access to itself and to any other roles it should manage. `roleupdate` covers a role's permissions and inheritance; `assign` covers granting or revoking the role on accounts.
 4. Call `PUT /update-account-roles` to grant yourself (or other accounts) that role.
 5. From here on, accounts with that role can manage roles/permissions on their own — `ROOT_ADMIN_EMAIL` can be left set as a permanent recovery path or unset once you're confident real admin accounts are in place. While it's set, it's a standing bypass of all authorization checks, so treat it like a secret.
 
@@ -90,6 +90,19 @@ To cut off a service account, remove its roles. Auth tokens it already holds kee
 A role can optionally carry display metadata: an `alias` (for example, `security-liaison` → `Security Liaison`) and `tags`. Metadata lives in its own `role_metadata` collection, separate from casbin, so it never affects permissions, inheritance, or tokens. A role doesn't need metadata, and metadata doesn't need the role to exist in casbin yet. Aliases are unique across roles, ignoring case.
 
 This service doesn't decide what kinds of roles exist. Instead, you register whichever tags make sense for your system in the `role_tags` collection, then assign any of them to a role. For example, to classify each role as either a user role or a feature flag, register `User` and `Feature` once and give each role one of them. The service only checks that assigned tags are registered; conventions like "exactly one of `User` or `Feature`" are up to you. A tag can't be deleted while any role still has it.
+
+## Impersonation
+
+`POST /impersonate` with `{"email": "<user email>"}` returns an auth token for that user, so support staff can see exactly what they see in other services.
+
+- **Permission.** The requester needs `auth:impersonate`. `auth` is a resource reserved by this service: it can't be used as a role name. Anyone with `roleupdate` on a role can grant it `auth:*` permissions (e.g. `PUT /update-role-permissions` adding `{"obj": "auth", "act": "impersonate"}` to a `support` role).
+- **Access token only.** The response is `{"token": "...", "payload": {...}}`, like the sign-in endpoints. No refresh token is issued, so the session ends when the token expires after 15 minutes.
+- **Marked tokens.** The payload is the target user's, plus `impersonated_by` with the impersonator's email. Downstream services can use it to show a banner or audit actions.
+- **Not usable here.** This service rejects impersonation tokens on every endpoint except `/login`, including `/impersonate` and `/refresh-token`.
+- **Protected targets.** Service accounts and `ROOT_ADMIN_EMAIL` can't be impersonated.
+- **Logged.** Each use is logged at INFO (`<impersonator> impersonated <user>`), and each denied attempt at WARNING.
+
+Every token carries a `token_type`: `access` for auth tokens (including impersonation tokens) and `refresh` for refresh tokens. `/refresh-token` accepts only refresh tokens, and this service accepts only access tokens in the `Authorization` header. Other services should also check for `token_type: access`. Tokens issued before this change don't have the claim, so those users sign in again once.
 
 ## Running on your Local Machine
 

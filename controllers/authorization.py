@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, field_validator
-from models.Token import Token
 from models.Account import Account, EMAIL_PATTERN
 from util.enforcer import enforcer, is_authorized
+from util.requesting_account import decode_authorization_header
+from util.reserved_permissions import is_reserved_resource
 
 router = APIRouter()
 
@@ -43,6 +44,10 @@ class UpdateRoleInheritanceRequestBody(BaseModel):
     remove_inherited_roles: list[str] = []
 
 
+def _reserved_role_error(role):
+    return {'error': f'{role} is reserved by the auth service and cannot be used as a role.'}
+
+
 @router.get('/roles', tags=['Authorization'])
 def get_roles(authorization: str = Header(default=None)):
     """Gets the names of all known roles.
@@ -53,7 +58,7 @@ def get_roles(authorization: str = Header(default=None)):
     """
 
     # Any authenticated account may list role names.
-    Token.decode_token(authorization.split(' ')[1])
+    decode_authorization_header(authorization)
 
     role_names = {sub for sub, _, _ in enforcer.get_policy()}
     role_names.update(enforcer.get_all_roles())
@@ -70,7 +75,7 @@ def get_account(response: Response,
                 authorization: str = Header(default=None)):
     """Gets an account's email, roles, and permissions."""
 
-    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account_payload = decode_authorization_header(authorization)
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
     account = Account.find_by_email(email)
@@ -108,7 +113,7 @@ def get_accounts_with_role(response: Response,
     """
 
     # Get the permissions of the requesting account.
-    requesting_account = Token.decode_token(authorization.split(' ')[1])
+    requesting_account = decode_authorization_header(authorization)
     requesting_account = Account.find_by_email(requesting_account['email'])
 
     if not is_authorized(requesting_account.email, role, 'read'):
@@ -131,13 +136,20 @@ def update_authorization(response: Response,
     """Adds or removes roles granted to accounts."""
 
     # Get the permissions of the requesting account.
-    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account_payload = decode_authorization_header(authorization)
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
+
+    reserved_role = next((role for role in body.add_roles if is_reserved_resource(role)), None)
+    if reserved_role:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return _reserved_role_error(reserved_role)
 
     account = Account.find_by_email(body.email)
 
     changed_roles = body.add_roles + body.remove_roles
-    is_permitted = all(is_authorized(requesting_account.email, role, 'write') for role in changed_roles)
+    is_permitted = all(
+        is_authorized(requesting_account.email, role, 'assign') for role in changed_roles
+    )
 
     if is_permitted:
         for role in body.remove_roles:
@@ -147,7 +159,7 @@ def update_authorization(response: Response,
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': 'This account is not authorized to write to this user\'s authorization(s).'
+            'error': 'This account is not authorized to assign or revoke these role(s).'
         }
 
     account_response = account.__dict__.copy()
@@ -170,7 +182,7 @@ def get_role_permissions(response: Response,
     not any inherited permissions from inherited roles.
     """
 
-    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account_payload = decode_authorization_header(authorization)
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
     if not is_authorized(requesting_account.email, role, 'read'):
@@ -192,13 +204,17 @@ def update_role_permissions(response: Response,
                             authorization: str = Header(default=None)):
     """Adds or removes permissions granted to a role."""
 
-    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account_payload = decode_authorization_header(authorization)
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
-    if not is_authorized(requesting_account.email, body.role, 'write'):
+    if is_reserved_resource(body.role):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return _reserved_role_error(body.role)
+
+    if not is_authorized(requesting_account.email, body.role, 'roleupdate'):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': f'This account is not authorized to write to the {body.role} role\'s permissions.'
+            'error': f'This account is not authorized to update the {body.role} role\'s permissions.'
         }
 
     for permission in body.remove_permissions:
@@ -219,7 +235,7 @@ def get_role_inheritance(response: Response,
                          authorization: str = Header(default=None)):
     """Gets the roles a role inherits from, and its resulting effective permissions."""
 
-    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account_payload = decode_authorization_header(authorization)
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
     if not is_authorized(requesting_account.email, role, 'read'):
@@ -246,13 +262,19 @@ def update_role_inheritance(response: Response,
                             authorization: str = Header(default=None)):
     """Adds or removes the roles a role inherits from."""
 
-    requesting_account_payload = Token.decode_token(authorization.split(' ')[1])
+    requesting_account_payload = decode_authorization_header(authorization)
     requesting_account = Account.find_by_email(requesting_account_payload['email'])
 
-    if not is_authorized(requesting_account.email, body.role, 'write'):
+    roles_being_linked = [body.role, *body.add_inherited_roles]
+    reserved_role = next((role for role in roles_being_linked if is_reserved_resource(role)), None)
+    if reserved_role:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return _reserved_role_error(reserved_role)
+
+    if not is_authorized(requesting_account.email, body.role, 'roleupdate'):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
-            'error': f'This account is not authorized to write to the {body.role} role\'s inheritance.'
+            'error': f'This account is not authorized to update the {body.role} role\'s inheritance.'
         }
 
     for inherited_role in body.add_inherited_roles:
