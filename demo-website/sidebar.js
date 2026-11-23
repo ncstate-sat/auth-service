@@ -15,7 +15,7 @@ export function initSidebar() {
 }
 
 function buildNavGroup(groupName) {
-    const headingId = `nav-group-${groupName.toLowerCase()}`;
+    const headingId = `nav-group-${groupName.toLowerCase().replace(/\s+/g, '-')}`;
     const links = ENDPOINTS
         .filter((endpoint) => endpoint.group === groupName)
         .map((endpoint) => el('li', {}, [buildNavLink(endpoint)]));
@@ -38,7 +38,7 @@ function buildNavLink(endpoint) {
 
 function buildLockIndicator() {
     const indicator = el('span', { className: 'nav-item__lock', attrs: { 'data-lock': '' } });
-    indicator.innerHTML = `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${LOCK_ICON_PATHS}</svg>`;
+    indicator.innerHTML = `<svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${LOCK_ICON_PATHS}</svg>`;
     indicator.append(el('span', { className: 'visually-hidden', text: '(sign in required)' }));
     return indicator;
 }
@@ -47,9 +47,24 @@ function markCurrentPage(route = currentRoute()) {
     for (const link of document.querySelectorAll('.sidebar [data-route]')) {
         if (link.dataset.route === route) {
             link.setAttribute('aria-current', 'page');
+            scrollSidebarToShow(link);
         } else {
             link.removeAttribute('aria-current');
         }
+    }
+}
+
+/** Scrolls only the sidebar, never the page, so the current link is visible above the wire log. */
+function scrollSidebarToShow(link) {
+    const sidebar = link.closest('.sidebar');
+    const sidebarBox = sidebar.getBoundingClientRect();
+    const visibleBottom = Math.min(sidebarBox.bottom, document.getElementById('wire').getBoundingClientRect().top);
+    const linkBox = link.getBoundingClientRect();
+    const breathingRoom = 12;
+    if (linkBox.top < sidebarBox.top) {
+        sidebar.scrollTop -= sidebarBox.top - linkBox.top + breathingRoom;
+    } else if (linkBox.bottom > visibleBottom) {
+        sidebar.scrollTop += linkBox.bottom - visibleBottom + breathingRoom;
     }
 }
 

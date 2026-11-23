@@ -5,10 +5,11 @@
  */
 
 import { parseLines, parsePermissionLines } from './field-parsing.js';
+import { roleField } from './endpoint-fields.js';
+import { ROLE_METADATA_ENDPOINTS, ROLE_TAG_ENDPOINTS } from './role-metadata-endpoints.js';
 
-export const ENDPOINT_GROUPS = ['Authentication', 'Roles', 'Accounts', 'Impersonation'];
+export const ENDPOINT_GROUPS = ['Authentication', 'Roles', 'Role metadata', 'Role tags', 'Accounts', 'Impersonation'];
 
-const roleField = (placeholder) => ({ name: 'role', label: 'Role', placeholder, hint: '' });
 const emailField = (placeholder, hint = '') => ({ name: 'email', label: 'Email', placeholder, hint, prefillWithSessionEmail: true });
 const oneRolePerLine = 'One role per line.';
 const onePermissionPerLine = 'One per line, as object:action.';
@@ -131,7 +132,7 @@ export const ENDPOINTS = [
         auth: 'Bearer token',
         permission: 'roleupdate on the role',
         requiresSignIn: true,
-        more: 'There is no separate create endpoint. A denial comes back as 400 with an error message. The role name auth is reserved, but auth:impersonate can be granted like any other permission.',
+        more: 'There is no separate create endpoint. A denial comes back as 400 with an error message. The role name auth is reserved, but auth:impersonate and auth:managetags can be granted like any other permission.',
         fields: [
             roleField('editor'),
             { name: 'add', label: 'Permissions to add', multiline: true, placeholder: 'member:read\nmember:write', hint: onePermissionPerLine },
@@ -249,7 +250,14 @@ export const ENDPOINTS = [
         fields: [{ name: 'email', label: 'Email of the user to impersonate', placeholder: 'pat@university.edu', hint: '' }],
         buildRequest: (values) => ({ body: { email: values.email ?? '' } }),
     },
+    ...ROLE_METADATA_ENDPOINTS,
+    ...ROLE_TAG_ENDPOINTS,
 ];
+
+/** The path a request goes to: endpoints with a path parameter fill it in from the form. */
+export function requestPath(endpoint, requestOptions) {
+    return requestOptions.path ?? endpoint.path;
+}
 
 export function findEndpoint(endpointId) {
     return ENDPOINTS.find((endpoint) => endpoint.id === endpointId) ?? null;

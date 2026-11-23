@@ -9,6 +9,15 @@ export function initTopBar() {
     document.getElementById('refresh-session').addEventListener('click', handleRefresh);
     document.getElementById('sign-out').addEventListener('click', handleSignOut);
     onSessionChange(renderTopBar);
+    publishTopBarHeight();
+}
+
+/** Keeps --top-bar-height current, since the bar wraps onto more lines as the window narrows. */
+function publishTopBarHeight() {
+    const topBar = document.querySelector('.top-bar');
+    const publish = () => document.documentElement.style.setProperty('--top-bar-height', `${topBar.offsetHeight}px`);
+    publish();
+    new ResizeObserver(publish).observe(topBar);
 }
 
 function renderTopBar(session) {

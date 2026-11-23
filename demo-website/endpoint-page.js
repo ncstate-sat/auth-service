@@ -7,6 +7,7 @@ import { getResponse, saveResponse, onResponseChange } from './response-store.js
 import { onSignInFlowChange, getSignInFlow } from './google-sign-in.js';
 import { initRequestForm, renderRequestForm } from './request-form.js';
 import { renderResponse } from './response-panel.js';
+import { requestPath } from './endpoints.js';
 
 const STEP_STATE_LABELS = { pending: 'Pending', active: 'In progress', complete: 'Done', error: 'Failed' };
 
@@ -93,7 +94,7 @@ function buildFlowStep(step, index) {
 async function sendRequest(endpoint, values) {
     const session = getSession();
     const requestOptions = endpoint.buildRequest(values, { token: session?.token, refreshToken: session?.refreshToken });
-    const result = await request(endpoint.method, endpoint.path, requestOptions);
+    const result = await request(endpoint.method, requestPath(endpoint, requestOptions), requestOptions);
     saveResponse(endpoint.id, result);
     if (result.ok && endpoint.refreshesSessionWhenBlank && !values.token) {
         startSession({ token: result.body.token, refreshToken: result.body.refresh_token });
