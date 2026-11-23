@@ -18,8 +18,19 @@ SECURITY_LIAISON = {'role': 'security-liaison', 'alias': 'Security Liaison', 'ta
                     'description': 'Coordinates security reviews'}
 
 
+EXISTING_ROLES = ('viewer', 'reader', 'admin', 'security-liaison', 'reports/viewer',
+                  'beta-search', 'dark-mode')
+
+
 @pytest.fixture(autouse=True)
-def signed_in_role_manager(monkeypatch):
+def existing_roles(in_memory_casbin):
+    for role in EXISTING_ROLES:
+        in_memory_casbin.add_policy(role, 'records', 'read')
+    return in_memory_casbin
+
+
+@pytest.fixture(autouse=True)
+def signed_in_role_manager(monkeypatch, existing_roles):
     """Signs requests in as an account allowed to do anything, unless a test sends other headers."""
     monkeypatch.setattr(enforcer, 'enforce', lambda sub, _obj, _act: sub == ROLE_MANAGER_EMAIL)
     monkeypatch.setitem(client.headers, 'Authorization',
@@ -165,6 +176,30 @@ def test_post_with_null_or_empty_tags_clears_them(cleared_tags):
 
     assert response.json() == {
         'role': 'viewer', 'alias': 'Viewer', 'tags': [], 'description': None}
+
+
+def test_post_rejects_role_that_does_not_exist():
+    response = save({'role': 'ghost', 'alias': 'Ghost'})
+
+    assert response.status_code == 422
+    assert '"ghost" does not exist' in response.json()['detail']
+    assert client.get('/role-metadata/ghost').status_code == 404
+
+
+def test_post_accepts_role_that_only_exists_through_an_account(existing_roles):
+    existing_roles.add_grouping_policy('pat@university.edu', 'auditor')
+
+    response = save({'role': 'auditor', 'alias': 'Auditor'})
+
+    assert response.status_code == 201
+
+
+def test_post_accepts_role_that_only_exists_through_inheritance(existing_roles):
+    existing_roles.add_grouping_policy('auditor', 'viewer')
+
+    response = save({'role': 'auditor', 'alias': 'Auditor'})
+
+    assert response.status_code == 201
 
 
 def test_post_rejects_unregistered_tags():

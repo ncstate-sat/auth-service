@@ -19,9 +19,11 @@ ROOT_ADMIN_EMAIL = 'root@university.edu'
 
 
 @pytest.fixture(autouse=True)
-def signed_in_tag_manager(monkeypatch):
+def signed_in_tag_manager(monkeypatch, in_memory_casbin):
     """Signs requests in as an account with auth:managetags, unless a test passes other headers."""
     monkeypatch.setenv('ROOT_ADMIN_EMAIL', ROOT_ADMIN_EMAIL)
+    for role in ('dark-mode', 'beta-search'):
+        in_memory_casbin.add_policy(role, 'records', 'read')
     monkeypatch.setattr(enforcer, 'enforce', lambda sub, obj, act: (
         sub == TAG_MANAGER_EMAIL and (obj, act) in {('auth', 'managetags'),
                                                     ('dark-mode', 'roleupdate'),

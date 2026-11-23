@@ -1,5 +1,6 @@
 """A model to handle role metadata CRUD, stored apart from casbin's policy data."""
 
+from models.Role import Role
 from models.RoleTag import RoleTag
 from pymongo.errors import DuplicateKeyError
 from util.database import database
@@ -17,6 +18,16 @@ class DuplicateAliasError(Exception):
         super().__init__(f'The alias "{alias}" is already used{owner}.')
 
 
+class UnknownRoleError(Exception):
+    """Raised when metadata is saved for a role that doesn't exist in casbin."""
+
+    def __init__(self, role):
+        self.role = role
+        super().__init__(
+            f'Role "{role}" does not exist. Give it a permission, an account, or an '
+            'inheritance link first.')
+
+
 class UnknownTagError(Exception):
     """Raised when a role is given tags that aren't registered."""
 
@@ -30,8 +41,8 @@ class UnknownTagError(Exception):
 class RoleMetadata:
     """The RoleMetadata model handles CRUD for a role's alias, tags, and description.
 
-    A role does not need metadata to exist, and metadata does not need the
-    role to exist in casbin.
+    A role does not need metadata, but metadata needs its role: it can only be
+    saved for a role casbin references, and is deleted once casbin no longer does.
     """
     collection = database['role_metadata']
 
@@ -74,8 +85,10 @@ class RoleMetadata:
 
         changes maps any of 'alias', 'tags', and 'description' to a new value;
         None clears that field and a field left out of changes keeps its current
-        value. Tags must already be registered as RoleTags.
+        value. The role must exist in casbin, and tags must already be registered as RoleTags.
         """
+        if not Role.exists(role):
+            raise UnknownRoleError(role)
         if changes.get('alias') is not None:
             cls._reject_alias_used_by_other_role(role, changes['alias'])
         if changes.get('tags'):
@@ -93,6 +106,13 @@ class RoleMetadata:
     def delete(cls, role):
         """Deletes a role's metadata. Returns whether there was any to delete."""
         return cls.collection.delete_one({'role': role}).deleted_count == 1
+
+    @classmethod
+    def delete_for_roles_that_no_longer_exist(cls, roles):
+        """Deletes the metadata of any of the given roles that casbin no longer references."""
+        for role in set(roles):
+            if not Role.exists(role):
+                cls.delete(role)
 
     @classmethod
     def _reject_alias_used_by_other_role(cls, role, alias):

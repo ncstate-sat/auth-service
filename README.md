@@ -87,7 +87,7 @@ To cut off a service account, remove its roles. Auth tokens it already holds kee
 
 ## Role Metadata
 
-A role can optionally carry display metadata: an `alias` (for example, `security-liaison` → `Security Liaison`), `tags`, and a `description`. Metadata lives in its own `role_metadata` collection, separate from casbin, so it never affects permissions, inheritance, or tokens. A role doesn't need metadata, and metadata doesn't need the role to exist in casbin yet. Aliases are unique across roles, ignoring case.
+A role can optionally carry display metadata: an `alias` (for example, `security-liaison` → `Security Liaison`), `tags`, and a `description`. Metadata lives in its own `role_metadata` collection, separate from casbin, so it never affects permissions, inheritance, or tokens. A role doesn't need metadata, but metadata is bound to a real role: it can only be saved for a role that exists (one listed by `GET /roles`, meaning it has a permission, an account, or an inheritance link), and it's deleted automatically once the role no longer exists, for example when its last permission is removed or it's revoked from its last account. Its alias is then free to use again. Aliases are unique across roles, ignoring case.
 
 This service doesn't decide what kinds of roles exist. Instead, you register whichever tags make sense for your system in the `role_tags` collection, then assign any of them to a role. For example, to classify each role as either a user role or a feature flag, register `User` and `Feature` once and give each role one of them. The service only checks that assigned tags are registered; conventions like "exactly one of `User` or `Feature`" are up to you. Tags can have a `description` too.
 

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from models.Account import EMAIL_PATTERN
-from models.RoleMetadata import DuplicateAliasError, RoleMetadata, UnknownTagError
+from models.RoleMetadata import DuplicateAliasError, RoleMetadata, UnknownRoleError, UnknownTagError
 from pydantic import BaseModel, ValidationInfo, field_validator, model_validator
 from util.enforcer import is_authorized
 from util.requesting_account import decode_authorization_header
@@ -124,13 +124,14 @@ def get_role_metadata(role: str, authorization: str = Header(default=None)):
                             'description': 'Missing <role>:roleupdate permission'},
                         status.HTTP_409_CONFLICT: {'description': 'Alias already in use'},
                         status.HTTP_422_UNPROCESSABLE_CONTENT: {
-                            'description': 'Invalid body or unregistered tag'}})
+                            'description': 'Invalid body, unknown role, or unregistered tag'}})
 def save_role_metadata(body: SaveRoleMetadataRequestBody, response: Response,
                        authorization: str = Header(default=None)):
     """Creates a role's metadata, or updates it if the role already has some.
 
-    Requires `<role>:roleupdate`. Returns 201 when created and 200 when updated. Aliases are
-    unique across roles, ignoring case. Tags must already be registered at /role-tags.
+    Requires `<role>:roleupdate`. The role must exist (see GET /roles). Returns 201 when created
+    and 200 when updated. Aliases are unique across roles, ignoring case. Tags must already be
+    registered at /role-tags. Metadata is deleted automatically once its role no longer exists.
     """
     _require_role_update_permission(authorization, body.role)
 
@@ -138,7 +139,7 @@ def save_role_metadata(body: SaveRoleMetadataRequestBody, response: Response,
         metadata, was_created = RoleMetadata.save(body.role, body.metadata_changes())
     except DuplicateAliasError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(error)) from error
-    except UnknownTagError as error:
+    except (UnknownRoleError, UnknownTagError) as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
 
     response.status_code = status.HTTP_201_CREATED if was_created else status.HTTP_200_OK

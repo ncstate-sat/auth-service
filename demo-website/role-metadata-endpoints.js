@@ -55,7 +55,7 @@ export const ROLE_METADATA_ENDPOINTS = [
         auth: 'Bearer token',
         permission: 'roleupdate on the role',
         requiresSignIn: true,
-        more: 'Returns 201 when created and 200 when updated. Fields you leave blank keep their current value. Sent tags replace the role’s whole tag list. Aliases are unique across roles, ignoring case (409 if taken), and tags must already be registered under Role tags (422 if not). The role doesn’t need to exist in Casbin yet.',
+        more: 'Returns 201 when created and 200 when updated. Fields you leave blank keep their current value. Sent tags replace the role’s whole tag list. Aliases are unique across roles, ignoring case (409 if taken), and tags must already be registered under Role tags (422 if not). The role must already exist, meaning it has a permission, an account or an inheritance link (422 if not). Metadata is deleted automatically once the role stops existing.',
         fields: [
             roleField('security-liaison'),
             { name: 'alias', label: 'Alias', placeholder: 'Security Liaison', hint: 'A display name. Leave blank to keep the current one.' },
