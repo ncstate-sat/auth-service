@@ -1,9 +1,11 @@
 """Controller functions and routes for role metadata (alias, tags, and description) CRUD."""
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from models.Account import EMAIL_PATTERN
 from models.RoleMetadata import DuplicateAliasError, RoleMetadata, UnknownTagError
 from pydantic import BaseModel, ValidationInfo, field_validator, model_validator
+from util.enforcer import is_authorized
+from util.requesting_account import decode_authorization_header
 
 router = APIRouter(prefix='/role-metadata', tags=['Role Metadata'])
 
@@ -75,16 +77,41 @@ class SaveRoleMetadataRequestBody(BaseModel):
         return {field: getattr(self, field) for field in self.model_fields_set & EDITABLE_FIELDS}
 
 
+def _require_permission_on_role(authorization, role, action, denied_message):
+    requesting_email = decode_authorization_header(authorization)['email']
+    if not is_authorized(requesting_email, role, action):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=denied_message)
+
+
+def _require_role_read_permission(authorization, role):
+    _require_permission_on_role(
+        authorization, role, 'read',
+        f'This account is not authorized to read the {role} role\'s metadata.')
+
+
+def _require_role_update_permission(authorization, role):
+    _require_permission_on_role(
+        authorization, role, 'roleupdate',
+        f'This account is not authorized to update the {role} role\'s metadata.')
+
+
 @router.get('', response_model=RoleMetadataListResponse)
 def get_all_role_metadata(
-        tag: str | None = Query(None, description='Only include roles with this tag')):
-    """Gets the metadata of every role that has some. Roles without metadata are left out."""
-    return {'role_metadata': RoleMetadata.find_all(tag)}
+        tag: str | None = Query(None, description='Only include roles with this tag'),
+        authorization: str = Header(default=None)):
+    """Gets the metadata of every role the requester can read (`<role>:read`) that has some."""
+    requesting_email = decode_authorization_header(authorization)['email']
+    readable_metadata = [metadata for metadata in RoleMetadata.find_all(tag)
+                         if is_authorized(requesting_email, metadata['role'], 'read')]
+    return {'role_metadata': readable_metadata}
 
 
-@router.get('/{role:path}', response_model=RoleMetadataResponse)
-def get_role_metadata(role: str):
-    """Gets one role's metadata. Returns 404 if the role has none."""
+@router.get('/{role:path}', response_model=RoleMetadataResponse,
+            responses={status.HTTP_403_FORBIDDEN: {
+                'description': 'Missing <role>:read permission'}})
+def get_role_metadata(role: str, authorization: str = Header(default=None)):
+    """Gets one role's metadata. Requires `<role>:read`. Returns 404 if the role has none."""
+    _require_role_read_permission(authorization, role)
     metadata = RoleMetadata.find_by_role(role)
     if metadata is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f'Role "{role}" has no metadata.')
@@ -93,15 +120,20 @@ def get_role_metadata(role: str):
 
 @router.post('', response_model=RoleMetadataResponse,
              responses={status.HTTP_201_CREATED: {'description': 'Metadata created'},
+                        status.HTTP_403_FORBIDDEN: {
+                            'description': 'Missing <role>:roleupdate permission'},
                         status.HTTP_409_CONFLICT: {'description': 'Alias already in use'},
                         status.HTTP_422_UNPROCESSABLE_CONTENT: {
                             'description': 'Invalid body or unregistered tag'}})
-def save_role_metadata(body: SaveRoleMetadataRequestBody, response: Response):
+def save_role_metadata(body: SaveRoleMetadataRequestBody, response: Response,
+                       authorization: str = Header(default=None)):
     """Creates a role's metadata, or updates it if the role already has some.
 
-    Returns 201 when created and 200 when updated. Aliases are unique across
-    roles, ignoring case. Tags must already be registered at /role-tags.
+    Requires `<role>:roleupdate`. Returns 201 when created and 200 when updated. Aliases are
+    unique across roles, ignoring case. Tags must already be registered at /role-tags.
     """
+    _require_role_update_permission(authorization, body.role)
+
     try:
         metadata, was_created = RoleMetadata.save(body.role, body.metadata_changes())
     except DuplicateAliasError as error:
@@ -113,9 +145,12 @@ def save_role_metadata(body: SaveRoleMetadataRequestBody, response: Response):
     return metadata
 
 
-@router.delete('/{role:path}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_role_metadata(role: str):
-    """Deletes a role's metadata. The role itself and its casbin data are untouched."""
+@router.delete('/{role:path}', status_code=status.HTTP_204_NO_CONTENT,
+               responses={status.HTTP_403_FORBIDDEN: {
+                   'description': 'Missing <role>:roleupdate permission'}})
+def delete_role_metadata(role: str, authorization: str = Header(default=None)):
+    """Deletes a role's metadata. Requires `<role>:roleupdate`. Casbin data is untouched."""
+    _require_role_update_permission(authorization, role)
     if not RoleMetadata.delete(role):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f'Role "{role}" has no metadata.')
     return Response(status_code=status.HTTP_204_NO_CONTENT)

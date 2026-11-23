@@ -1,12 +1,38 @@
 """Tests for the role tags controller functions."""
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 from main import app
+from models.Token import Token
+from util.enforcer import enforcer
 
 client = TestClient(app)
+os.environ["JWT_SECRET"] = "TEST_SECRET"
 
 pytestmark = pytest.mark.usefixtures('in_memory_role_collections')
+
+TAG_MANAGER_EMAIL = 'tag-manager@university.edu'
+OTHER_EMAIL = 'other@university.edu'
+ROOT_ADMIN_EMAIL = 'root@university.edu'
+
+
+@pytest.fixture(autouse=True)
+def signed_in_tag_manager(monkeypatch):
+    """Signs requests in as an account with auth:managetags, unless a test passes other headers."""
+    monkeypatch.setenv('ROOT_ADMIN_EMAIL', ROOT_ADMIN_EMAIL)
+    monkeypatch.setattr(enforcer, 'enforce', lambda sub, obj, act: (
+        sub == TAG_MANAGER_EMAIL and (obj, act) in {('auth', 'managetags'),
+                                                    ('dark-mode', 'roleupdate'),
+                                                    ('dark-mode', 'read'),
+                                                    ('beta-search', 'roleupdate')}))
+    monkeypatch.setitem(client.headers, 'Authorization',
+                        bearer(TAG_MANAGER_EMAIL)['Authorization'])
+
+
+def bearer(email):
+    return {'Authorization': f'Bearer {Token.generate_token({"email": email})}'}
 
 
 def create_tag(name, description=None):
@@ -189,3 +215,34 @@ def test_tag_names_containing_a_slash_work_in_the_path():
 
     assert response.json() == {'name': 'team/platform', 'description': 'Platform team'}
     assert client.delete('/role-tags/team%2Fplatform').status_code == 204
+
+
+TAG_ENDPOINTS = [
+    ('get', '/role-tags', None),
+    ('post', '/role-tags', {'name': 'Beta'}),
+    ('patch', '/role-tags/Feature', {'description': 'Feature flags'}),
+    ('delete', '/role-tags/Feature', None),
+]
+
+
+@pytest.mark.parametrize('method, path, body', TAG_ENDPOINTS)
+def test_every_endpoint_requires_managetags(monkeypatch, method, path, body):
+    create_tag('Feature')
+    monkeypatch.setattr(enforcer, 'enforce', lambda sub, obj, act: (
+        sub == TAG_MANAGER_EMAIL or (sub == OTHER_EMAIL and act == 'roleupdate')))
+
+    response = client.request(method, path, json=body, headers=bearer(OTHER_EMAIL))
+
+    assert response.status_code == 403
+    assert client.get('/role-tags').json() == {
+        'role_tags': [{'name': 'Feature', 'description': None}]}
+
+
+@pytest.mark.parametrize('method, path, body', TAG_ENDPOINTS)
+def test_root_admin_can_use_every_endpoint(monkeypatch, method, path, body):
+    create_tag('Feature')
+    monkeypatch.setattr(enforcer, 'enforce', lambda *_request: False)
+
+    response = client.request(method, path, json=body, headers=bearer(ROOT_ADMIN_EMAIL))
+
+    assert response.status_code < 300

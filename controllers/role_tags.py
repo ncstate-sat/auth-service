@@ -1,11 +1,27 @@
 """Controller functions and routes for the tags that can be assigned to roles."""
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from models.RoleMetadata import RoleMetadata
 from models.RoleTag import DuplicateTagError, RoleTag
 from pydantic import BaseModel, field_validator, model_validator
+from util.enforcer import is_authorized
+from util.requesting_account import decode_authorization_header
+from util.reserved_permissions import AUTH_RESOURCE, MANAGE_TAGS_ACTION
 
-router = APIRouter(prefix='/role-tags', tags=['Role Tags'])
+
+def require_tag_management_permission(authorization: str = Header(default=None)):
+    """Rejects requests from accounts without `auth:managetags` (the root admin always passes)."""
+    requesting_email = decode_authorization_header(authorization)['email']
+    if not is_authorized(requesting_email, AUTH_RESOURCE, MANAGE_TAGS_ACTION):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            detail='This account is not authorized to manage role tags.')
+
+
+router = APIRouter(
+    prefix='/role-tags', tags=['Role Tags'],
+    dependencies=[Depends(require_tag_management_permission)],
+    responses={status.HTTP_403_FORBIDDEN: {'description': 'Missing auth:managetags permission'}},
+)
 
 
 class RoleTagResponse(BaseModel):

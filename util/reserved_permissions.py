@@ -3,6 +3,7 @@
 AUTH_RESOURCE = 'auth'
 RESERVED_RESOURCES = [AUTH_RESOURCE]
 IMPERSONATE_ACTION = 'impersonate'
+MANAGE_TAGS_ACTION = 'managetags'
 
 
 def is_reserved_resource(name):
