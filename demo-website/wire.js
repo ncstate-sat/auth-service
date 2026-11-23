@@ -1,106 +1,116 @@
 /**
- * The wire tape: a docked log of every HTTP call the bench makes,
- * each entry expandable to the full request and response.
+ * The wire log: a drawer docked to the bottom of the page listing every
+ * HTTP call the bench makes, each expandable to the full request and response.
  */
 
-import { el, prettyJson, announce, syncScrollRegion } from './ui.js';
+import { el, prettyJson, announce, syncScrollRegion } from './dom.js';
+import { describeStatus } from './api.js';
 
 const MAX_ENTRIES = 50;
 
-let entriesEl;
-let countEl;
-let emptyEl;
 let requestCount = 0;
 
 export function initWire() {
-    entriesEl = document.getElementById('wire-entries');
-    countEl = document.getElementById('wire-count');
-
-    emptyEl = el('p', {
-        className: 'wire__empty',
-        text: 'No requests yet — everything the bench sends to the service will appear here.',
-    });
-    entriesEl.append(emptyEl);
-
-    document.getElementById('wire-clear').addEventListener('click', () => {
-        entriesEl.replaceChildren(emptyEl);
-        requestCount = 0;
-        countEl.textContent = '0 requests';
-        announce('Wire log cleared.');
-    });
-
-    const toggle = document.getElementById('wire-toggle');
-    toggle.addEventListener('click', () => {
-        const wire = document.getElementById('wire');
-        const collapsed = wire.classList.toggle('wire--collapsed');
-        toggle.setAttribute('aria-expanded', String(!collapsed));
-        toggle.textContent = collapsed ? 'Expand' : 'Collapse';
-    });
+    document.getElementById('wire-toggle').addEventListener('click', toggleWire);
+    document.getElementById('wire-clear').addEventListener('click', clearWire);
+    keepScrollPaddingClearOfWire();
 }
 
-/** Appends one request entry (newest first). Called from api.js. */
-export function recordEntry(entry) {
-    emptyEl.remove();
+/** Adds one request to the top of the log. Called by api.js for every request. */
+export function recordWireEntry(entry) {
     requestCount += 1;
-    countEl.textContent = `${requestCount} request${requestCount === 1 ? '' : 's'}`;
+    renderCount();
+    document.getElementById('wire-empty').hidden = true;
+    const time = formatClockTime(new Date());
+    document.getElementById('wire-last').textContent = `${time}  ${entry.method} ${entry.path}  ${describeStatus(entry.status)}`;
 
-    const failed = entry.status === null || entry.status >= 400;
-    const statusText = entry.status === null ? 'network error' : String(entry.status);
+    const entries = document.getElementById('wire-entries');
+    entries.prepend(buildEntry(entry, time));
+    const renderedEntries = entries.querySelectorAll('.wire-entry');
+    if (renderedEntries.length > MAX_ENTRIES) {
+        renderedEntries[renderedEntries.length - 1].remove();
+    }
+}
 
+function toggleWire() {
+    const toggle = document.getElementById('wire-toggle');
+    const expanded = toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded', String(expanded));
+    document.getElementById('wire-entries').hidden = !expanded;
+}
+
+function clearWire() {
+    requestCount = 0;
+    renderCount();
+    for (const entry of document.querySelectorAll('.wire-entry')) {
+        entry.remove();
+    }
+    document.getElementById('wire-empty').hidden = false;
+    document.getElementById('wire-last').textContent = 'Requests appear here as you send them.';
+    announce('Wire log cleared.');
+}
+
+function renderCount() {
+    document.getElementById('wire-count').textContent = `${requestCount} request${requestCount === 1 ? '' : 's'}`;
+}
+
+function buildEntry(entry, time) {
+    const failed = !entry.ok;
+    const pathChildren = [entry.path];
+    if (entry.usedCustomToken) {
+        pathChildren.push(el('span', { className: 'wire-entry__actor', text: 'with a pasted token' }));
+    }
     const summary = el('summary', {}, [
-        el('span', { className: 'wire-entry__method', text: entry.method }),
-        el('span', { className: 'wire-entry__path', text: entry.path }),
-        ...(entry.asServiceAccount
-            ? [el('span', { className: 'wire-entry__actor', text: 'as service account' })]
-            : []),
+        el('span', { className: 'wire-entry__time', text: time }),
+        el('span', { text: entry.method }),
+        el('span', { className: 'wire-entry__path' }, pathChildren),
         el('span', {
             className: `wire-entry__status wire-entry__status--${failed ? 'error' : 'ok'}`,
-            text: statusText,
+            text: entry.status === null ? 'network error' : String(entry.status),
         }),
-        el('span', { className: 'wire-entry__ms', text: `${entry.durationMs} ms` }),
+        el('span', { className: 'wire-entry__duration', text: `${entry.durationMs} ms` }),
     ]);
 
-    const body = el('div', { className: 'wire-entry__body' }, [
-        el('p', { className: 'wire-entry__heading', text: 'Request headers' }),
-        el('pre', {
-            className: 'wire-entry__pre',
-            text: Object.entries(entry.requestHeaders)
-                .map(([name, value]) => `${name}: ${value}`)
-                .join('\n') || '(none)',
-        }),
-        el('p', { className: 'wire-entry__heading', text: 'Request body' }),
-        el('pre', {
-            className: 'wire-entry__pre',
-            text: entry.requestBody !== undefined ? prettyJson(entry.requestBody) : '(no body)',
-        }),
-        el('p', { className: 'wire-entry__heading', text: 'Response' }),
-        el('pre', {
-            className: 'wire-entry__pre',
-            text: entry.error ?? (entry.responseBody !== null
-                ? prettyJson(entry.responseBody)
-                : '(empty response)'),
-        }),
-    ]);
-
-    const details = el('details', {
-        className: 'wire-entry',
-        attrs: { 'data-side': entry.side },
-    }, [summary, body]);
-
+    const details = el('details', { className: 'wire-entry' }, [summary, buildEntryBody(entry)]);
     details.addEventListener('toggle', () => {
-        for (const pre of details.querySelectorAll('.wire-entry__pre')) {
-            syncScrollRegion(pre, `${entry.method} ${entry.path}, ${pre.previousElementSibling.textContent}`);
+        for (const block of details.querySelectorAll('.wire-entry__pre')) {
+            syncScrollRegion(block, `${entry.method} ${entry.path}, ${block.previousElementSibling.textContent}`);
         }
     });
+    return details;
+}
 
-    entriesEl.prepend(details);
-    while (entriesEl.children.length > MAX_ENTRIES) {
-        entriesEl.lastElementChild.remove();
-    }
+function buildEntryBody(entry) {
+    const headers = Object.entries(entry.requestHeaders).map(([name, value]) => `${name}: ${value}`).join('\n');
+    return el('div', { className: 'wire-entry__body' }, [
+        ...buildSection('Request headers', headers || '(none)'),
+        ...buildSection('Request body', entry.requestBody !== undefined ? prettyJson(entry.requestBody) : '(no body)'),
+        ...buildSection('Response', describeResponse(entry)),
+    ]);
+}
 
-    // Successful calls are announced by the panel that made them; the
-    // wire only speaks up for failures so denials are never missed.
-    if (failed) {
-        announce(`${entry.method} ${entry.path} failed: ${statusText}.`);
+function buildSection(heading, text) {
+    return [
+        el('p', { className: 'wire-entry__heading', text: heading }),
+        el('pre', { className: 'wire-entry__pre', text }),
+    ];
+}
+
+function describeResponse(entry) {
+    if (entry.error) {
+        return entry.error;
     }
+    return entry.body !== null ? prettyJson(entry.body) : '(empty response)';
+}
+
+function formatClockTime(date) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+
+/** Keeps focused elements from scrolling under the sticky drawer (WCAG 2.4.11). */
+function keepScrollPaddingClearOfWire() {
+    const wire = document.getElementById('wire');
+    new ResizeObserver(() => {
+        document.documentElement.style.setProperty('--wire-height', `${wire.offsetHeight}px`);
+    }).observe(wire);
 }
