@@ -31,6 +31,10 @@
   --color-post-tint: #dff1ec;
   --color-put-ink: #4a2fa3;
   --color-put-tint: #ebe5fa;
+  --color-patch-ink: #7a4300;
+  --color-patch-tint: #fbeedb;
+  --color-delete-ink: #8f1f30;
+  --color-delete-tint: #fbe4e7;
 
   --font-body: 'Atkinson Hyperlegible', 'Segoe UI', Arial, sans-serif;
   --font-heading: 'Archivo', 'Segoe UI', Arial, sans-serif;
@@ -257,12 +261,12 @@ code {
 }
 
 .sidebar {
-  flex: 1 1 260px;
+  flex: 1 1 340px;
   max-width: 100%;
-  padding: 20px 14px;
+  padding: 14px 12px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
 }
@@ -270,12 +274,12 @@ code {
 .sidebar__groups {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 8px;
 }
 
 .nav-group__title {
-  margin: 0 0 6px 10px;
-  font-size: 12px;
+  margin: 0 0 2px 12px;
+  font-size: 13.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -287,19 +291,20 @@ code {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .nav-item {
   width: 100%;
-  min-height: var(--touch-target);
-  padding: 6px 10px;
+  min-height: 32px;
+  padding: 3px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-small);
   color: var(--color-ink);
-  font-size: 15px;
+  font-size: 17px;
+  line-height: 1.3;
   text-decoration: none;
 }
 
@@ -326,12 +331,17 @@ code {
   color: var(--color-muted);
 }
 
+.nav-item .method {
+  width: 62px;
+  font-size: 13.5px;
+}
+
 .nav-item[aria-current='page'] .nav-item__lock {
   color: #c9d3dc;
 }
 
 .method {
-  width: 42px;
+  width: 50px;
   flex: none;
   padding: 2px 0;
   border-radius: var(--radius-small);
@@ -355,6 +365,16 @@ code {
 .method--put {
   background: var(--color-put-tint);
   color: var(--color-put-ink);
+}
+
+.method--patch {
+  background: var(--color-patch-tint);
+  color: var(--color-patch-ink);
+}
+
+.method--delete {
+  background: var(--color-delete-tint);
+  color: var(--color-delete-ink);
 }
 
 .method--large {
@@ -707,6 +727,44 @@ code {
   resize: vertical;
 }
 
+.field--choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.field--choices legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+.field--choices .choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch-target);
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.field--choices .choice input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
 .field input::placeholder,
 .field textarea::placeholder {
   color: #5f6f7e;
@@ -962,6 +1020,28 @@ code {
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* Side by side with the content, the top bar and sidebar stay put and the sidebar scrolls on its own. */
+@media (min-width: 880px) {
+  html {
+    scroll-padding-top: calc(var(--top-bar-height, 0px) + 16px);
+  }
+
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: var(--top-bar-height, 0px);
+    align-self: flex-start;
+    height: calc(100vh - var(--top-bar-height, 0px) - var(--wire-height));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 @media (max-width: 640px) {

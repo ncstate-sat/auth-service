@@ -96,6 +96,10 @@ def test_impersonate_rejects_invalid_email():
     ('put', '/update-account-roles', {'email': TARGET_EMAIL, 'add_roles': ['admin']}),
     ('put', '/update-role-permissions', {'role': 'member', 'add_permissions': []}),
     ('put', '/update-role-inheritance', {'role': 'member', 'add_inherited_roles': []}),
+    ('get', '/role-metadata', None),
+    ('post', '/role-metadata', {'role': 'member', 'alias': 'Member'}),
+    ('delete', '/role-metadata/member', None),
+    ('get', '/role-tags', None),
 ])
 def test_auth_service_rejects_impersonation_tokens(method, path, body):
     response = client.request(method, path, json=body, headers=impersonation_headers())

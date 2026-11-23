@@ -3,6 +3,8 @@
 from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, field_validator
 from models.Account import Account, EMAIL_PATTERN
+from models.Role import Role
+from models.RoleMetadata import RoleMetadata
 from util.enforcer import enforcer, is_authorized
 from util.requesting_account import decode_authorization_header
 from util.reserved_permissions import is_reserved_resource
@@ -60,13 +62,7 @@ def get_roles(authorization: str = Header(default=None)):
     # Any authenticated account may list role names.
     decode_authorization_header(authorization)
 
-    role_names = {sub for sub, _, _ in enforcer.get_policy()}
-    role_names.update(enforcer.get_all_roles())
-    role_names.update(sub for sub, _ in enforcer.get_grouping_policy())
-
-    return {
-        'roles': sorted(name for name in role_names if not EMAIL_PATTERN.match(name))
-    }
+    return {'roles': Role.find_all_names()}
 
 
 @router.get('/account', tags=['Authorization'])
@@ -156,6 +152,7 @@ def update_authorization(response: Response,
             account.remove_role(role)
         for role in body.add_roles:
             account.add_role(role)
+        RoleMetadata.delete_for_roles_that_no_longer_exist(body.remove_roles)
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {
@@ -221,6 +218,7 @@ def update_role_permissions(response: Response,
         enforcer.remove_policy(body.role, permission.obj, permission.act)
     for permission in body.add_permissions:
         enforcer.add_policy(body.role, permission.obj, permission.act)
+    RoleMetadata.delete_for_roles_that_no_longer_exist([body.role])
 
     permissions = [{'obj': obj, 'act': act} for _, obj, act in enforcer.get_filtered_policy(0, body.role)]
 
@@ -288,6 +286,7 @@ def update_role_inheritance(response: Response,
         enforcer.remove_grouping_policy(body.role, inherited_role)
     for inherited_role in body.add_inherited_roles:
         enforcer.add_grouping_policy(body.role, inherited_role)
+    RoleMetadata.delete_for_roles_that_no_longer_exist([body.role, *body.remove_inherited_roles])
 
     inherited_roles = enforcer.get_roles_for_user(body.role)
 

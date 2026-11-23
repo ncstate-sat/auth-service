@@ -4,6 +4,7 @@ import { el, prettyJson, setCodeBlock } from './dom.js';
 import { buildUrl } from './api.js';
 import { buildCurlCommand } from './curl.js';
 import { copyWithConfirmation } from './clipboard.js';
+import { requestPath } from './endpoints.js';
 
 const PREVIEW_TOKENS = { token: '<your auth token>', refreshToken: '<your refresh token>' };
 
@@ -49,6 +50,10 @@ export function renderRequestForm(endpoint) {
 }
 
 function buildField(endpoint, field) {
+    return field.type === 'choices' ? buildChoicesField(endpoint, field) : buildTextField(endpoint, field);
+}
+
+function buildTextField(endpoint, field) {
     const inputId = `field-${endpoint.id}-${field.name}`;
     const hintId = `${inputId}-hint`;
     const input = field.multiline
@@ -72,6 +77,40 @@ function buildField(endpoint, field) {
     return el('div', { className: 'field' }, children);
 }
 
+/** A group of checkboxes whose value is the list of checked choice values. */
+function buildChoicesField(endpoint, field) {
+    const fieldsetId = `field-${endpoint.id}-${field.name}`;
+    const hintId = `${fieldsetId}-hint`;
+    const checkboxes = field.choices.map((choice) => buildChoiceCheckbox(endpoint, field, choice));
+    const children = [el('legend', { text: field.label }), el('div', { className: 'choices' }, checkboxes)];
+    const fieldset = el('fieldset', { className: 'field field--choices', attrs: { id: fieldsetId } });
+    if (field.hint) {
+        fieldset.setAttribute('aria-describedby', hintId);
+        children.push(el('p', { className: 'hint', text: field.hint, attrs: { id: hintId } }));
+    }
+    fieldset.append(...children);
+    return fieldset;
+}
+
+function buildChoiceCheckbox(endpoint, field, choice) {
+    const checkboxId = `field-${endpoint.id}-${field.name}-${choice.value}`;
+    const checkbox = el('input', { attrs: { type: 'checkbox', id: checkboxId, name: field.name, value: choice.value } });
+    checkbox.checked = (getValues(endpoint)[field.name] ?? []).includes(choice.value);
+    checkbox.addEventListener('change', () => {
+        const checkedValues = new Set(getValues(endpoint)[field.name] ?? []);
+        if (checkbox.checked) {
+            checkedValues.add(choice.value);
+        } else {
+            checkedValues.delete(choice.value);
+        }
+        getValues(endpoint)[field.name] = field.choices
+            .map((candidate) => candidate.value)
+            .filter((value) => checkedValues.has(value));
+        renderPreview();
+    });
+    return el('label', { className: 'choice', attrs: { for: checkboxId } }, [checkbox, choice.label]);
+}
+
 function renderPreview() {
     const requestOptions = shownEndpoint.buildRequest(getValues(shownEndpoint), PREVIEW_TOKENS);
     setCodeBlock(document.getElementById('request-preview'), describeRequest(requestOptions));
@@ -81,8 +120,8 @@ function describeRequest(requestOptions) {
     if (requestOptions.body !== undefined) {
         return prettyJson(requestOptions.body);
     }
-    if (requestOptions.query) {
-        const url = buildUrl(shownEndpoint.path, requestOptions.query);
+    if (requestOptions.query || requestOptions.path) {
+        const url = buildUrl(requestPath(shownEndpoint, requestOptions), requestOptions.query);
         return `No body. Sent as ${url.pathname}${url.search}`;
     }
     return 'No body.';

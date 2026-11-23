@@ -85,6 +85,21 @@ Service accounts work like people: any service account can sign in, and what it 
 
 To cut off a service account, remove its roles. Auth tokens it already holds keep their old roles until they expire, within 15 minutes.
 
+## Role Metadata
+
+A role can optionally carry display metadata: an `alias` (for example, `security-liaison` → `Security Liaison`), `tags`, and a `description`. Metadata lives in its own `role_metadata` collection, separate from casbin, so it never affects permissions, inheritance, or tokens. A role doesn't need metadata, but metadata is bound to a real role: it can only be saved for a role that exists (one listed by `GET /roles`, meaning it has a permission, an account, or an inheritance link), and it's deleted automatically once the role no longer exists, for example when its last permission is removed or it's revoked from its last account. Its alias is then free to use again. Aliases are unique across roles, ignoring case.
+
+This service doesn't decide what kinds of roles exist. Instead, you register whichever tags make sense for your system in the `role_tags` collection, then assign any of them to a role. For example, to classify each role as either a user role or a feature flag, register `User` and `Feature` once and give each role one of them. The service only checks that assigned tags are registered; conventions like "exactly one of `User` or `Feature`" are up to you. Tags can have a `description` too.
+
+Permissions:
+
+- **Reading metadata** requires `read` on the role, e.g. `viewer:read`. `GET /role-metadata/{role}` returns 403 without it, and `GET /role-metadata` leaves out the roles you can't read.
+- **Setting or deleting a role's metadata** (`POST /role-metadata`, `DELETE /role-metadata/{role}`) requires `roleupdate` on that role, e.g. `viewer:roleupdate`. That includes adding or removing its tags.
+- **Every `/role-tags` endpoint** (list, create, update, delete) requires the reserved `auth:managetags` permission. Like any `auth:*` permission, anyone with `roleupdate` on a role can grant it to that role, and the root admin can always manage tags.
+
+Requests without the needed permission get a 403.
+
+
 ## Impersonation
 
 `POST /impersonate` with `{"email": "<user email>"}` returns an auth token for that user, so support staff can see exactly what they see in other services.

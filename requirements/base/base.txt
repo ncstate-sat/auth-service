@@ -4,7 +4,6 @@
 #
 #    pip-compile --output-file=requirements/base/base.txt pyproject.toml
 #
-
 annotated-doc==0.0.4
     # via fastapi
 annotated-types==0.7.0
@@ -58,7 +57,9 @@ pydantic-core==2.46.4
 pyjwt==2.13.0
     # via auth-service (pyproject.toml)
 pymongo==4.17.0
-    # via casbin-pymongo-adapter
+    # via
+    #   auth-service (pyproject.toml)
+    #   casbin-pymongo-adapter
 requests==2.34.2
     # via auth-service (pyproject.toml)
 simpleeval==1.0.7
